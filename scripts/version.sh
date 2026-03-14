@@ -10,7 +10,12 @@ if [ -z "$1" ]; then
 fi
 
 NEW_VERSION=$1
-echo "Atualizando a versão do projeto para: $NEW_VERSION"
+
+# Versão adaptada para Arch (converte hifens em underlines para ser válido no PKGBUILD)
+ARCH_VERSION=$(echo "$NEW_VERSION" | tr '-' '_')
+
+echo "Atualizando versão do projeto para: $NEW_VERSION"
+echo "Versão adaptada para Arch: $ARCH_VERSION"
 
 # 1. Atualiza o package.json
 if [ -f "package.json" ]; then
@@ -26,9 +31,17 @@ fi
 
 # 3. Atualiza o src-tauri/Cargo.toml
 if [ -f "src-tauri/Cargo.toml" ]; then
-  # Procura pela linha version = "..." abaixo de [package]
   sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" src-tauri/Cargo.toml
   echo "✓ src-tauri/Cargo.toml atualizado"
 fi
 
-echo "Concluído! Versão alterada para $NEW_VERSION"
+# 4. Atualiza o PKGBUILD (se existir)
+if [ -f "PKGBUILD" ]; then
+  sed -i "s/^pkgver=.*/pkgver=$ARCH_VERSION/" PKGBUILD
+  echo "✓ PKGBUILD atualizado (versão compatível com Arch)"
+fi
+
+echo "--------------------------------"
+echo "Versão do projeto: $NEW_VERSION"
+echo "Versão Arch (PKGBUILD): $ARCH_VERSION"
+echo "Concluído! Versão alterada por Pedro Farias."

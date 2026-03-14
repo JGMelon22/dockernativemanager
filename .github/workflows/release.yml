@@ -59,8 +59,9 @@ jobs:
 
           PKG_VERSION="${{ github.ref_name }}"
           PKG_VERSION="${PKG_VERSION#v}"
+          PKG_VERSION="${PKG_VERSION//-/.}"
 
-          # Copy binary and icon to dist-arch
+
           cp src-tauri/target/release/docker-native-manager dist-arch/
           cp src-tauri/icons/icon.png dist-arch/
 
@@ -73,7 +74,7 @@ jobs:
           Categories=Development;
           DESKTOP
 
-          # Create the .desktop file
+
           cat > dist-arch/PKGBUILD << EOF
           pkgname=dockernativemanager-bin
           pkgver=${PKG_VERSION}
@@ -85,23 +86,23 @@ jobs:
           depends=('cairo' 'gdk-pixbuf2' 'glib2' 'gtk3' 'hicolor-icon-theme' 'libsoup3' 'webkit2gtk-4.1')
           options=('!strip')
           source=('docker-native-manager'
-                  'icon.png'
-                  'docker-native-manager.desktop')
+          'icon.png'
+          'docker-native-manager.desktop')
           sha256sums=('SKIP' 'SKIP' 'SKIP')
 
           package() {
-            install -Dm755 "\${srcdir}/docker-native-manager" \\
-                           "\${pkgdir}/usr/bin/docker-native-manager"
+          install -Dm755 "\${srcdir}/docker-native-manager" \\
+                 "\${pkgdir}/usr/bin/docker-native-manager"
+          install -Dm644 "\${srcdir}/icon.png" \\
+                 "\${pkgdir}/usr/share/icons/hicolor/256x256/apps/docker-native-manager.png"
+          install -Dm644 "\${srcdir}/docker-native-manager.desktop" \\
+                 "\${pkgdir}/usr/share/applications/docker-native-manager.desktop"
 
-            install -Dm644 "\${srcdir}/icon.png" \\
-                           "\${pkgdir}/usr/share/icons/hicolor/256x256/apps/docker-native-manager.png"
 
-            install -Dm644 "\${srcdir}/docker-native-manager.desktop" \\
-                           "\${pkgdir}/usr/share/applications/docker-native-manager.desktop"
           }
           EOF
 
-          # Build package in Arch Linux container
+
           docker run --rm \
             -v "$PWD/dist-arch:/build" \
             -w /build \
@@ -113,6 +114,6 @@ jobs:
               su - builduser -c 'cd /build && makepkg -s --noconfirm'
             "
 
-          # Upload Arch Linux package to GitHub Release
+
           ARCH_PKG=$(ls dist-arch/*.pkg.tar.zst)
           gh release upload "${{ github.ref_name }}" "$ARCH_PKG" --clobber
