@@ -37,9 +37,10 @@ A modern, native, and blazing-fast desktop application to manage your Docker env
 ```bash
 sudo apt install ./docker-native-manager-x.y.z-x86_64.deb
 ```
-### Distributions using RPM (Fedora, etc.)
+### Distributions using RPM (Fedora/openSUSE, etc.)
 ```bash
 sudo dnf install ./docker-native-manager-x.y.z-x86_64.rpm
+sudo zypper install ./docker-native-manager-x.y.z-x86_64.rpm
 ```
 ### Distributions using ALPM (Arch Linux, CachyOS, SteamOS, etc.)
 ```bash
