@@ -7,7 +7,7 @@
 
 A modern, native, and blazing-fast desktop application to manage your Docker environments, built with **Tauri v2**, **React**, **TypeScript**, and **Rust**.
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/1b10e3eb-415b-47d0-8974-6bf47bac9585" />
+![alt text](<dockernm.png>)
 
 ## ✨ Features
 
