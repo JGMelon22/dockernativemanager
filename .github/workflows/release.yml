@@ -95,7 +95,7 @@ jobs:
           cd ..
           
           # Run makepkg inside an Arch Linux container
-          docker run --rm -v $PWD:/workspace -w /workspace/dist-arch archlinux:base-devel bash -c "useradd -m builduser && chown -R builduser:builduser /workspace && su - builduser -c 'cd /workspace/dist-arch && makepkg -sf --noconfirm'"
+          docker run --rm -v $PWD:/workspace -w /workspace/dist-arch archlinux:base-devel bash -c "pacman -Sy --noconfirm && useradd -m builduser && echo 'builduser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && chown -R builduser:builduser /workspace && su - builduser -c 'cd /workspace/dist-arch && makepkg -s --noconfirm'"
           
           # Upload package to the current GitHub Release
           cd dist-arch
