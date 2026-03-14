@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import NotFound from "./pages/NotFound";
+import Index from "./pages/Index";
 import Containers from "./pages/Containers";
 import Stacks from "./pages/Stacks";
 import Images from "./pages/Images";
@@ -21,7 +22,7 @@ const App = () => (
       <BrowserRouter>
         <AppLayout>
           <Routes>
-            <Route path="/" element={<Navigate to="/containers" replace />} />
+            <Route path="/" element={<Index />} />
             <Route path="/containers" element={<Containers />} />
             <Route path="/stacks" element={<Stacks />} />
             <Route path="/images" element={<Images />} />

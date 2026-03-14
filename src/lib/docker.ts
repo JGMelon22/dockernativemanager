@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 // Helper to check if we are running inside Tauri
-const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__;
+const isTauri = typeof window !== 'undefined' && !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
 export interface Container {
   id: string;
@@ -12,6 +12,7 @@ export interface Container {
   status: string;
   state: string;
   ports: string;
+  labels: Record<string, string>;
 }
 
 export interface ContainerStats {
@@ -49,9 +50,9 @@ export interface Stack {
 
 // MOCK DATA for Web Preview
 const MOCK_CONTAINERS: Container[] = [
-  { id: "c1", name: "nginx-proxy", image: "nginx:latest", status: "running", state: "Up 2 hours", ports: "80:80, 443:443" },
-  { id: "c2", name: "postgres-db", image: "postgres:15-alpine", status: "running", state: "Up 5 hours", ports: "5432:5432" },
-  { id: "c3", name: "redis-cache", image: "redis:7", status: "exited", state: "Exited (0) 10 mins ago", ports: "6379" },
+  { id: "c1", name: "nginx-proxy", image: "nginx:latest", status: "running", state: "Up 2 hours", ports: "80:80, 443:443", labels: {} },
+  { id: "c2", name: "postgres-db", image: "postgres:15-alpine", status: "running", state: "Up 5 hours", ports: "5432:5432", labels: {} },
+  { id: "c3", name: "redis-cache", image: "redis:7", status: "exited", state: "Exited (0) 10 mins ago", ports: "6379", labels: {} },
 ];
 
 const MOCK_IMAGES: Image[] = [
@@ -111,9 +112,15 @@ export const deleteContainer = async (id: string) => {
   return await invoke("delete_container", { id });
 };
 
-export const createContainer = async (name: string, image: string) => {
-  if (!isTauri) return console.log("Mock: Creating container", name, image);
-  return await invoke("create_container", { name, image });
+export const createContainer = async (
+  name: string,
+  image: string,
+  ports: string[] = [],
+  envs: string[] = [],
+  volumes: string[] = []
+) => {
+  if (!isTauri) return console.log("Mock: Creating container", name, image, ports, envs, volumes);
+  return await invoke("create_container", { name, image, ports, envs, volumes });
 };
 
 export const deleteImage = async (id: string) => {
@@ -169,4 +176,66 @@ export const deployStack = async (name: string, composeContent: string): Promise
 export const removeStack = async (name: string): Promise<void> => {
   if (!isTauri) return console.log("Mock: Removing stack", name);
   await invoke("remove_stack", { name });
+};
+
+export const getStackCompose = async (name: string): Promise<string> => {
+  if (!isTauri) return "version: '3'\nservices:\n  web:\n    image: nginx";
+  return await invoke("get_stack_compose", { name });
+};
+
+export const dockerSystemPrune = async (): Promise<string> => {
+  if (!isTauri) return "Mock: System pruned successfully. Reclaimed 0B.";
+  return await invoke("docker_system_prune");
+};
+
+export const inspectContainer = async (id: string): Promise<string> => {
+  if (!isTauri) return JSON.stringify({ mock: "data", id }, null, 2);
+  return await invoke("inspect_container", { id });
+};
+
+export const inspectImage = async (id: string): Promise<string> => {
+  if (!isTauri) return JSON.stringify({ mock: "image_data", id }, null, 2);
+  return await invoke("inspect_image", { id });
+};
+
+export const inspectVolume = async (name: string): Promise<string> => {
+  if (!isTauri) return JSON.stringify({ mock: "volume_data", name }, null, 2);
+  return await invoke("inspect_volume", { name });
+};
+
+export const inspectNetwork = async (id: string): Promise<string> => {
+  if (!isTauri) return JSON.stringify({ mock: "network_data", id }, null, 2);
+  return await invoke("inspect_network", { id });
+};
+
+export interface SystemInfo {
+  containers: number;
+  containers_running: number;
+  containers_paused: number;
+  containers_stopped: number;
+  images: number;
+  version: string;
+  operating_system: string;
+  ncpu: number;
+  mem_total: number;
+}
+
+export const getSystemInfo = async (): Promise<SystemInfo> => {
+  if (!isTauri) return {
+    containers: 5,
+    containers_running: 2,
+    containers_paused: 0,
+    containers_stopped: 3,
+    images: 12,
+    version: "24.0.7",
+    operating_system: "Docker Desktop (Mock)",
+    ncpu: 8,
+    mem_total: 16000000000
+  };
+  return await invoke("get_system_info");
+};
+
+export const execContainer = async (containerId: string, command: string): Promise<void> => {
+  if (!isTauri) return console.log("Mock: Executing in container", containerId, command);
+  return await invoke("exec_container", { containerId, command });
 };

@@ -2,13 +2,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bollard::Docker;
-use bollard::container::{ListContainersOptions, StartContainerOptions, StopContainerOptions, RemoveContainerOptions, LogsOptions, RestartContainerOptions, CreateContainerOptions, Config, StatsOptions, MemoryStatsStats};
+use bollard::container::{ListContainersOptions, StartContainerOptions, StopContainerOptions, RemoveContainerOptions, LogsOptions, RestartContainerOptions, CreateContainerOptions, Config, StatsOptions, MemoryStatsStats, InspectContainerOptions};
 use bollard::image::{ListImagesOptions, RemoveImageOptions, CreateImageOptions};
+use bollard::models::{HostConfig, PortBinding};
 use bollard::volume::{ListVolumesOptions, RemoveVolumeOptions, CreateVolumeOptions};
-use bollard::network::{ListNetworksOptions, CreateNetworkOptions};
+use bollard::network::{ListNetworksOptions, CreateNetworkOptions, InspectNetworkOptions};
 use futures_util::stream::StreamExt;
 use serde::Serialize;
 use std::collections::HashMap;
+use bollard::exec::{CreateExecOptions, StartExecResults};
 
 #[derive(Serialize)]
 struct ContainerInfo {
@@ -18,6 +20,7 @@ struct ContainerInfo {
     status: String,
     state: String,
     ports: String,
+    labels: HashMap<String, String>,
 }
 
 #[derive(Serialize)]
@@ -83,6 +86,7 @@ async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
                     format!("{}/{}", p.private_port, typ)
                 }
             }).collect::<Vec<_>>().join(", "),
+            labels: c.labels.unwrap_or_default(),
         })
         .collect())
 }
@@ -139,17 +143,77 @@ async fn delete_container(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn create_container(name: String, image: String) -> Result<(), String> {
+async fn create_container(
+    name: String,
+    image: String,
+    ports: Vec<String>,
+    envs: Vec<String>,
+    volumes: Vec<String>,
+) -> Result<(), String> {
     let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
-    let options = Some(CreateContainerOptions {
-        name,
-        ..Default::default()
-    });
-    let config = Config {
-        image: Some(image),
+
+    let options = if name.trim().is_empty() {
+        None
+    } else {
+        Some(CreateContainerOptions {
+            name,
+            ..Default::default()
+        })
+    };
+
+    let mut port_bindings = HashMap::new();
+    let mut exposed_ports = HashMap::new();
+
+    for port_mapping in ports {
+        let parts: Vec<&str> = port_mapping.split(':').collect();
+        if parts.len() == 2 {
+            let host_port = parts[0].to_string();
+            let mut container_port = parts[1].to_string();
+            if !container_port.contains('/') {
+                container_port = format!("{}/tcp", container_port);
+            }
+
+            port_bindings.insert(
+                container_port.clone(),
+                Some(vec![PortBinding {
+                    host_ip: Some("0.0.0.0".to_string()),
+                    host_port: Some(host_port),
+                }]),
+            );
+            exposed_ports.insert(container_port, HashMap::new());
+        }
+    }
+
+    let host_config = HostConfig {
+        port_bindings: if port_bindings.is_empty() {
+            None
+        } else {
+            Some(port_bindings)
+        },
+        binds: if volumes.is_empty() {
+            None
+        } else {
+            Some(volumes)
+        },
         ..Default::default()
     };
-    docker.create_container(options, config).await.map_err(|e| e.to_string())?;
+
+    let config = Config {
+        image: Some(image),
+        env: if envs.is_empty() { None } else { Some(envs) },
+        exposed_ports: if exposed_ports.is_empty() {
+            None
+        } else {
+            Some(exposed_ports)
+        },
+        host_config: Some(host_config),
+        ..Default::default()
+    };
+
+    docker
+        .create_container(options, config)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -161,10 +225,9 @@ async fn delete_image(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn pull_image(image: String) -> Result<(), String> {
+async fn pull_image(app_handle: AppHandle, image: String) -> Result<(), String> {
     let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
     
-    // Ensure the image name includes a tag if missing
     let full_image = if image.contains(':') {
         image
     } else {
@@ -173,7 +236,7 @@ async fn pull_image(image: String) -> Result<(), String> {
 
     let mut stream = docker.create_image(
         Some(CreateImageOptions {
-            from_image: full_image,
+            from_image: full_image.clone(),
             ..Default::default()
         }),
         None,
@@ -186,6 +249,7 @@ async fn pull_image(image: String) -> Result<(), String> {
                 if let Some(error) = progress.error {
                     return Err(format!("Docker pull error: {}", error));
                 }
+                let _ = app_handle.emit(&format!("pull-progress-{}", full_image), progress);
             }
             Err(e) => return Err(format!("Docker stream error: {}", e)),
         }
@@ -274,7 +338,7 @@ async fn get_container_logs(id: String) -> Result<String, String> {
     Ok(output)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct ContainerStats {
     cpu_percent: f64,
     memory_usage: u64,
@@ -406,8 +470,217 @@ async fn remove_stack(name: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn get_stack_compose(name: String) -> Result<String, String> {
+    let mut temp_file = std::env::temp_dir();
+    temp_file.push(format!("compose-{}.yaml", name));
+    
+    match std::fs::read_to_string(&temp_file) {
+        Ok(content) => Ok(content),
+        Err(_) => Err("Compose file not found. It might have been created outside this app.".to_string()),
+    }
+}
+
+use tauri::{AppHandle, Emitter};
+
+#[tauri::command]
+async fn docker_system_prune() -> Result<String, String> {
+    let output = std::process::Command::new("docker")
+        .arg("system")
+        .arg("prune")
+        .arg("-f")
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+#[tauri::command]
+async fn inspect_container(id: String) -> Result<String, String> {
+    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let inspect = docker.inspect_container(&id, None::<InspectContainerOptions>).await.map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn inspect_image(id: String) -> Result<String, String> {
+    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let inspect = docker.inspect_image(&id).await.map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn exec_container(app: AppHandle, container_id: String, command: String) -> Result<(), String> {
+    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+
+    let exec_config = CreateExecOptions {
+        attach_stdout: Some(true),
+        attach_stderr: Some(true),
+        attach_stdin: Some(true),
+        tty: Some(true),
+        cmd: Some(vec!["/bin/sh", "-c", &command]),
+        ..Default::default()
+    };
+
+    let exec = docker.create_exec(&container_id, exec_config).await.map_err(|e| e.to_string())?;
+    
+    if let StartExecResults::Attached { mut output, .. } = docker.start_exec(&exec.id, None).await.map_err(|e| e.to_string())? {
+        while let Some(msg) = output.next().await {
+            if let Ok(msg) = msg {
+                app.emit(&format!("exec-output-{}", container_id), msg.to_string()).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn inspect_volume(name: String) -> Result<String, String> {
+    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let inspect = docker.inspect_volume(&name).await.map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn inspect_network(id: String) -> Result<String, String> {
+    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let inspect = docker.inspect_network(&id, None::<InspectNetworkOptions<String>>).await.map_err(|e| e.to_string())?;
+    serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+struct SystemInfo {
+    containers: usize,
+    containers_running: usize,
+    containers_paused: usize,
+    containers_stopped: usize,
+    images: usize,
+    version: String,
+    operating_system: String,
+    ncpu: i64,
+    mem_total: i64,
+}
+
+#[tauri::command]
+async fn get_system_info() -> Result<SystemInfo, String> {
+    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let info = docker.info().await.map_err(|e| e.to_string())?;
+    let version = docker.version().await.map_err(|e| e.to_string())?;
+
+    Ok(SystemInfo {
+        containers: info.containers.unwrap_or(0) as usize,
+        containers_running: info.containers_running.unwrap_or(0) as usize,
+        containers_paused: info.containers_paused.unwrap_or(0) as usize,
+        containers_stopped: info.containers_stopped.unwrap_or(0) as usize,
+        images: info.images.unwrap_or(0) as usize,
+        version: version.version.unwrap_or_default(),
+        operating_system: info.operating_system.unwrap_or_default(),
+        ncpu: info.ncpu.unwrap_or(0),
+        mem_total: info.mem_total.unwrap_or(0),
+    })
+}
+
+use bollard::system::EventsOptions;
+
+async fn listen_to_docker_events(app_handle: AppHandle) {
+    let docker = match Docker::connect_with_local_defaults() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    let mut events = docker.events(None::<EventsOptions<String>>);
+
+    while let Some(event) = events.next().await {
+        if let Ok(event) = event {
+            let _ = app_handle.emit("docker-event", event);
+        }
+    }
+}
+
+async fn emit_container_stats(app_handle: AppHandle) {
+    let docker = match Docker::connect_with_local_defaults() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+        let containers = match docker.list_containers(Some(ListContainersOptions::<String> {
+            all: false, // only running
+            ..Default::default()
+        })).await {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        for c in containers {
+            if let Some(id) = c.id {
+                let id_clone = id.clone();
+                let mut stats_stream = docker.stats(&id_clone, Some(StatsOptions {
+                    stream: false,
+                    one_shot: false,
+                }));
+
+                if let Some(Ok(stats)) = stats_stream.next().await {
+                    let cpu_delta = stats.cpu_stats.cpu_usage.total_usage as f64 - stats.precpu_stats.cpu_usage.total_usage as f64;
+                    let system_delta = stats.cpu_stats.system_cpu_usage.unwrap_or(0) as f64 - stats.precpu_stats.system_cpu_usage.unwrap_or(0) as f64;
+                    let mut cpu_percent = 0.0;
+                    
+                    if system_delta > 0.0 && cpu_delta > 0.0 {
+                        let num_cpus = stats.cpu_stats.online_cpus.unwrap_or(1) as f64;
+                        cpu_percent = (cpu_delta / system_delta) * num_cpus * 100.0;
+                    }
+
+                    let memory_usage = stats.memory_stats.usage.unwrap_or(0);
+                    let memory_limit = stats.memory_stats.limit.unwrap_or(0);
+                    
+                    let mut actual_memory = memory_usage;
+                    if let Some(stats_detail) = stats.memory_stats.stats {
+                        match stats_detail {
+                            MemoryStatsStats::V1(v1) => {
+                                actual_memory = memory_usage.saturating_sub(v1.cache);
+                            }
+                            MemoryStatsStats::V2(v2) => {
+                                actual_memory = memory_usage.saturating_sub(v2.inactive_file);
+                            }
+                        }
+                    }
+
+                    let payload = ContainerStats {
+                        cpu_percent,
+                        memory_usage: actual_memory,
+                        memory_limit,
+                    };
+
+                    let _ = app_handle.emit(&format!("container-stats-{}", id_clone), payload);
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let handle_stats = app.handle().clone();
+            
+            tauri::async_runtime::spawn(async move {
+                listen_to_docker_events(handle).await;
+            });
+
+            tauri::async_runtime::spawn(async move {
+                emit_container_stats(handle_stats).await;
+            });
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_containers,
             get_images,
@@ -416,6 +689,7 @@ fn main() {
             get_stacks,
             deploy_stack,
             remove_stack,
+            get_stack_compose,
             start_container,
             stop_container,
             restart_container,
@@ -428,7 +702,14 @@ fn main() {
             delete_network,
             create_network,
             get_container_logs,
-            get_container_stats
+            get_container_stats,
+            docker_system_prune,
+            inspect_container,
+            inspect_image,
+            inspect_volume,
+            inspect_network,
+            get_system_info,
+            exec_container
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
