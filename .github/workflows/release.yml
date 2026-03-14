@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -24,8 +24,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
+          node-version: 24
+          cache: "pnpm"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -46,8 +46,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Docker Native Manager ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseName: "Docker Native Manager ${{ github.ref_name }}"
+          releaseBody: "See the assets to download this version and install."
           releaseDraft: false
           prerelease: false
 
@@ -57,16 +57,13 @@ jobs:
         run: |
           mkdir -p dist-arch
 
-          # FIX 3: strip o prefixo 'v' no bash, antes de escrever o PKGBUILD
           PKG_VERSION="${{ github.ref_name }}"
           PKG_VERSION="${PKG_VERSION#v}"
 
-          # Copia o binário e o ícone para dentro de dist-arch
-          # (serão referenciados pelo source=() do PKGBUILD)
+          # Copy binary and icon to dist-arch
           cp src-tauri/target/release/docker-native-manager dist-arch/
           cp src-tauri/icons/icon.png dist-arch/
 
-          # FIX 4: cria o .desktop como arquivo separado, fora do PKGBUILD
           cat > dist-arch/docker-native-manager.desktop << 'DESKTOP'
           [Desktop Entry]
           Name=Docker Native Manager
@@ -76,7 +73,7 @@ jobs:
           Categories=Development;
           DESKTOP
 
-          # FIX 1 + 2 + 3: EOF sem aspas (expande $PKG_VERSION) e sem indentação
+          # Create the .desktop file
           cat > dist-arch/PKGBUILD << EOF
           pkgname=dockernativemanager-bin
           pkgver=${PKG_VERSION}
@@ -85,15 +82,11 @@ jobs:
           arch=('x86_64')
           url="https://github.com/pedrofariasx/dockernativemanager"
           license=('MIT')
-          # FIX 5: depends corretos vindos do debtap
           depends=('cairo' 'gdk-pixbuf2' 'glib2' 'gtk3' 'hicolor-icon-theme' 'libsoup3' 'webkit2gtk-4.1')
           options=('!strip')
-          # FIX 4: arquivos locais declarados em source=()
-          # makepkg os copia para \$srcdir automaticamente
           source=('docker-native-manager'
                   'icon.png'
                   'docker-native-manager.desktop')
-          # SKIP evita calcular sha256 de binários locais em CI
           sha256sums=('SKIP' 'SKIP' 'SKIP')
 
           package() {
@@ -101,15 +94,14 @@ jobs:
                            "\${pkgdir}/usr/bin/docker-native-manager"
 
             install -Dm644 "\${srcdir}/icon.png" \\
-                           "\${pkgdir}/usr/share/pixmaps/docker-native-manager.png"
+                           "\${pkgdir}/usr/share/icons/hicolor/256x256/apps/docker-native-manager.png"
 
-            # FIX 4: instala o .desktop já criado como arquivo separado
             install -Dm644 "\${srcdir}/docker-native-manager.desktop" \\
                            "\${pkgdir}/usr/share/applications/docker-native-manager.desktop"
           }
           EOF
 
-          # Monta apenas dist-arch no container (não precisa do workspace inteiro)
+          # Build package in Arch Linux container
           docker run --rm \
             -v "$PWD/dist-arch:/build" \
             -w /build \
@@ -121,6 +113,6 @@ jobs:
               su - builduser -c 'cd /build && makepkg -s --noconfirm'
             "
 
-          # Faz upload do .pkg.tar.zst para a release do GitHub
+          # Upload Arch Linux package to GitHub Release
           ARCH_PKG=$(ls dist-arch/*.pkg.tar.zst)
           gh release upload "${{ github.ref_name }}" "$ARCH_PKG" --clobber
