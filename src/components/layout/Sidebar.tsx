@@ -7,7 +7,6 @@ import {
   Layers, 
   Database, 
   Network as NetworkIcon, 
-  Terminal,
   Settings,
   Circle,
   Trash,
@@ -18,7 +17,8 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import { dockerSystemPrune } from "@/lib/docker";
 import { showSuccess, showError } from "@/utils/toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 
@@ -34,6 +34,11 @@ const navItems = [
 const Sidebar = () => {
   const location = useLocation();
   const [isPruning, setIsPruning] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>("");
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion(""));
+  }, []);
   const { theme, setTheme } = useTheme();
 
   const handlePrune = async () => {
@@ -56,12 +61,10 @@ const Sidebar = () => {
   return (
     <div className="w-64 border-r bg-sidebar text-sidebar-foreground flex flex-col h-screen shrink-0">
       <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
-        <div className="bg-blue-600 p-2 rounded-lg">
-          <Terminal className="w-6 h-6 text-primary-foreground" />
-        </div>
+        <img src="/dnm-icon.png" alt="DNM Icon" className="w-12 h-12" />
         <div>
-          <h1 className="text-sidebar-foreground font-bold text-lg leading-none">Docker Native</h1>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Native Manager</p>
+          <h1 className="text-sidebar-foreground font-bold text-lg leading-none">Docker NM</h1>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">{appVersion ? `${appVersion}` : ""}</p>
         </div>
       </div>
 

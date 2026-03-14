@@ -242,9 +242,9 @@ const StatCard = ({ title, value, subtext, icon, loading }: StatCardProps) => (
           {value !== undefined ? value : "0"}
         </div>
       )}
-      <p className="text-xs text-muted-foreground mt-1">
+      <div className="text-xs text-muted-foreground mt-1">
         {loading ? <Skeleton className="h-3 w-32" /> : subtext}
-      </p>
+      </div>
     </CardContent>
   </Card>
 );

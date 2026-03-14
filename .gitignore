@@ -22,7 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.dyad/
 
 # Tauri
 src-tauri/target
