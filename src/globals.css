@@ -100,11 +100,12 @@
   }
 
   html, body {
-    @apply bg-transparent text-foreground overflow-hidden;
+    @apply bg-transparent text-foreground overflow-hidden select-none;
     background: transparent !important;
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
+    user-select: none;
   }
 
   #root {
