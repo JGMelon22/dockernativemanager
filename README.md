@@ -101,3 +101,7 @@ Feel free to check [issues page](https://github.com/pedrofariasx/dockernativeman
 ## 📝 License
 
 This project is [MIT](https://opensource.org/licenses/MIT) licensed.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=pedrofariasx/dockernativemanager&type=Date)](https://www.star-history.com/#pedrofariasx/dockernativemanager&Date)
