@@ -1,3 +1,13 @@
+/*
+ * File: sheet.tsx
+ * Project: docker-native-manager
+ * Created: 2026-03-13
+ * 
+ * Last Modified: Sun Mar 15 2026
+ * Modified By: Pedro Farias
+ * 
+ */
+
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { X } from "lucide-react";
@@ -56,7 +66,7 @@ const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
 >(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal container={document.getElementById("root") || document.body}>
+  <SheetPortal container={typeof document !== 'undefined' ? (document.getElementById("root-container") || document.getElementById("root")) : null}>
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}

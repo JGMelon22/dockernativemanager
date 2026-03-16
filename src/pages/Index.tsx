@@ -1,12 +1,25 @@
+/*
+ * File: Index.tsx
+ * Project: docker-native-manager
+ * Created: 2026-03-14
+ * Author: Pedro Farias
+ * 
+ * Last Modified: Sun Mar 15 2026
+ * Modified By: Pedro Farias
+ * 
+ * Copyright (c) 2026 Pedro Farias
+ * License: MIT
+ */
+
 "use client";
 
-import { useState } from "react";
+import { useMemo, memo } from "react";
 import { useDocker } from "@/context/DockerContext";
-import { useDockerEvent } from "@/hooks/use-docker-events";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Box, Layers, Activity, Info, Network, Database } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Box, Layers, Activity, Info, Network, Database, Cpu, HardDrive, MemoryStick, Disc2, Container } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line } from "recharts";
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return '0 B';
@@ -17,23 +30,17 @@ const formatBytes = (bytes: number) => {
 };
 
 const Index = () => {
-  const { systemInfo: info, volumes, networks, loading, refreshAll } = useDocker();
-  const [events, setEvents] = useState<{ time: Date; type: string; action: string; id: string }[]>([]);
+  const { systemInfo: info, volumes, networks, events, hostStats, hostStatsHistory, loading } = useDocker();
 
-  useDockerEvent("all", (event) => {
-    refreshAll();
-    if (event) {
-      setEvents((prev) => {
-        const newEvents = [{
-          time: new Date(),
-          type: event.Type || "system",
-          action: event.Action || "unknown",
-          id: (event.Actor?.ID || "").substring(0, 12)
-        }, ...prev];
-        return newEvents.slice(0, 20); // keep last 20
-      });
-    }
-  });
+  const containersIcon = useMemo(() => <Box className="w-5 h-5 text-blue-500" />, []);
+  const imagesIcon = useMemo(() => <Disc2 className="w-5 h-5 text-emerald-500" />, []);
+  const volumesIcon = useMemo(() => <Database className="w-5 h-5 text-amber-500" />, []);
+  const networksIcon = useMemo(() => <Network className="w-5 h-5 text-purple-500" />, []);
+  
+  const cpuIcon = useMemo(() => <Cpu className="w-5 h-5 text-orange-500" />, []);
+  const memIcon = useMemo(() => <MemoryStick className="w-5 h-5 text-cyan-500" />, []);
+  const diskIcon = useMemo(() => <HardDrive className="w-5 h-5 text-pink-500" />, []);
+  const netIcon = useMemo(() => <Network className="w-5 h-5 text-indigo-500" />, []);
 
   const chartData = info ? [
     { name: "Running", value: info.containers_running, color: "#10b981" },
@@ -42,6 +49,22 @@ const Index = () => {
   ].filter(d => d.value > 0) : [];
 
   const isInitialLoading = loading.systemInfo && !info;
+
+  const cpuChartData = useMemo(() => hostStatsHistory.map(h => ({ val: h.cpu_usage })), [hostStatsHistory]);
+  const memoryChartData = useMemo(() => hostStatsHistory.map(h => ({ val: h.memory_used })), [hostStatsHistory]);
+  const diskChartData = useMemo(() => hostStatsHistory.map(h => ({ read: h.disk_read_bytes, write: h.disk_write_bytes })), [hostStatsHistory]);
+  const netChartData = useMemo(() => hostStatsHistory.map(h => ({ down: h.net_rx_bytes, up: h.net_tx_bytes })), [hostStatsHistory]);
+
+  const cpuSeries = useMemo(() => [{ key: 'val', color: '#f97316' }], []);
+  const memorySeries = useMemo(() => [{ key: 'val', color: '#06b6d4' }], []);
+  const diskSeries = useMemo(() => [
+    { key: 'read', color: '#10b981' },
+    { key: 'write', color: '#f43f5e' }
+  ], []);
+  const netSeries = useMemo(() => [
+    { key: 'down', color: '#3b82f6' },
+    { key: 'up', color: '#a855f7' }
+  ], []);
 
   return (
     <div className="p-8 space-y-6">
@@ -55,29 +78,78 @@ const Index = () => {
           title="Containers"
           value={info?.containers}
           subtext={`${info?.containers_running} running, ${info?.containers_stopped} stopped`}
-          icon={<Box className="w-5 h-5 text-blue-500" />}
+          icon={containersIcon}
           loading={isInitialLoading}
         />
         <StatCard
           title="Images"
           value={info?.images}
           subtext="Total images on disk"
-          icon={<Layers className="w-5 h-5 text-emerald-500" />}
+          icon={imagesIcon}
           loading={isInitialLoading}
         />
         <StatCard
           title="Volumes"
           value={volumes.length}
           subtext="Local storage volumes"
-          icon={<Database className="w-5 h-5 text-amber-500" />}
+          icon={volumesIcon}
           loading={loading.volumes && volumes.length === 0}
         />
         <StatCard
           title="Networks"
           value={networks.length}
           subtext="Docker networks"
-          icon={<Network className="w-5 h-5 text-purple-500" />}
+          icon={networksIcon}
           loading={loading.networks && networks.length === 0}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="CPU Usage"
+          value={hostStats ? `${hostStats.cpu_usage.toFixed(1)}%` : "0%"}
+          subtext={`${info?.ncpu} Cores active`}
+          icon={cpuIcon}
+          loading={!hostStats && isInitialLoading}
+          chartData={cpuChartData}
+          series={cpuSeries}
+        />
+        <StatCard
+          title="Memory"
+          value={hostStats ? formatBytes(hostStats.memory_used) : "0 B"}
+          subtext={`of ${hostStats ? formatBytes(hostStats.memory_total) : "0 B"}`}
+          icon={memIcon}
+          loading={!hostStats && isInitialLoading}
+          chartData={memoryChartData}
+          series={memorySeries}
+        />
+        <StatCard
+          title="Disk I/O"
+          value={hostStats ? `${formatBytes(hostStats.disk_read_bytes + hostStats.disk_write_bytes)}/s` : "0 B/s"}
+          subtext={useMemo(() => (
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-400">R: {hostStats ? formatBytes(hostStats.disk_read_bytes) : "0"}/s</span>
+              <span className="text-rose-400">W: {hostStats ? formatBytes(hostStats.disk_write_bytes) : "0"}/s</span>
+            </div>
+          ), [hostStats])}
+          icon={diskIcon}
+          loading={!hostStats && isInitialLoading}
+          chartData={diskChartData}
+          series={diskSeries}
+        />
+        <StatCard
+          title="Network"
+          value={hostStats ? `${formatBytes(hostStats.net_rx_bytes + hostStats.net_tx_bytes)}/s` : "0 B/s"}
+          subtext={useMemo(() => (
+            <div className="flex items-center gap-2">
+              <span className="text-blue-400">↓ {hostStats ? formatBytes(hostStats.net_rx_bytes) : "0"}/s</span>
+              <span className="text-purple-400">↑ {hostStats ? formatBytes(hostStats.net_tx_bytes) : "0"}/s</span>
+            </div>
+          ), [hostStats])}
+          icon={netIcon}
+          loading={!hostStats && isInitialLoading}
+          chartData={netChartData}
+          series={netSeries}
         />
       </div>
 
@@ -86,7 +158,7 @@ const Index = () => {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Info className="w-5 h-5 text-blue-400" />
-              Daemon Information
+              System & Runtime
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 flex-1">
@@ -100,12 +172,28 @@ const Index = () => {
                 {isInitialLoading ? <Skeleton className="h-6 w-48" /> : <p className="text-foreground text-lg">{info?.operating_system}</p>}
               </div>
               <div className="space-y-1">
+                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Kernel Version</p>
+                {isInitialLoading ? <Skeleton className="h-6 w-32" /> : <p className="text-foreground text-lg font-mono">{info?.kernel_version}</p>}
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Storage Driver</p>
+                {isInitialLoading ? <Skeleton className="h-6 w-24" /> : <p className="text-foreground text-lg">{info?.storage_driver}</p>}
+              </div>
+              <div className="space-y-1">
                 <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">CPU Cores</p>
                 {isInitialLoading ? <Skeleton className="h-6 w-16" /> : <p className="text-foreground text-lg">{info?.ncpu} Cores</p>}
               </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Total RAM</p>
                 {isInitialLoading ? <Skeleton className="h-6 w-24" /> : <p className="text-foreground text-lg">{info ? formatBytes(info.mem_total) : ""}</p>}
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Architecture</p>
+                {isInitialLoading ? <Skeleton className="h-6 w-24" /> : <p className="text-foreground text-lg uppercase">{info?.architecture}</p>}
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Logging Driver</p>
+                {isInitialLoading ? <Skeleton className="h-6 w-24" /> : <p className="text-foreground text-lg">{info?.logging_driver}</p>}
               </div>
             </div>
           </CardContent>
@@ -114,7 +202,7 @@ const Index = () => {
         <Card className="bg-card/50 border-border text-card-foreground flex flex-col">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Activity className="w-5 h-5 text-rose-400" />
+              <Container className="w-5 h-5 text-rose-400" />
               Containers Overview
             </CardTitle>
           </CardHeader>
@@ -169,26 +257,99 @@ const Index = () => {
               <p className="text-sm">No recent events detected</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {events.map((e, i) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-border bg-background/50 text-sm">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {e.time.toLocaleTimeString()}
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-muted text-foreground text-xs font-semibold uppercase">
-                      {e.type}
-                    </span>
-                    <span className="text-foreground font-medium">
-                      {e.action}
-                    </span>
-                  </div>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {e.id}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <ScrollArea className="h-[350px] pr-4">
+              <div className="space-y-3">
+                {events.map((e, i) => {
+                  const getActionColor = (action: string) => {
+                    const a = action.toLowerCase();
+                    if (['start', 'create', 'pull', 'online', 'mount'].includes(a)) return 'text-emerald-400';
+                    if (['stop', 'die', 'kill', 'destroy', 'delete', 'remove', 'offline', 'unmount'].includes(a)) return 'text-rose-400';
+                    if (['pause', 'unpause', 'resize', 'rename', 'update', 'tag', 'untag'].includes(a)) return 'text-amber-400';
+                    return 'text-indigo-400';
+                  };
+
+                  const getTypeColor = (type: string) => {
+                    const t = type.toLowerCase();
+                    if (t === 'container') return 'text-blue-400';
+                    if (t === 'image') return 'text-emerald-400';
+                    if (t === 'network') return 'text-purple-400';
+                    if (t === 'volume') return 'text-amber-400';
+                    return 'text-muted-foreground';
+                  };
+
+                  const shortId = e.id.substring(0, 12);
+                  const displayName = e.attributes?.name || e.from || shortId;
+                  
+                  const getTypeIcon = (type: string) => {
+                    const t = type.toLowerCase();
+                    if (t === 'container') return <Box className="w-4 h-4" />;
+                    if (t === 'image') return <Layers className="w-4 h-4" />;
+                    if (t === 'network') return <Network className="w-4 h-4" />;
+                    if (t === 'volume') return <Database className="w-4 h-4" />;
+                    return <Activity className="w-4 h-4" />;
+                  };
+
+                  return (
+                    <div key={i} className="flex gap-4 p-4 rounded-lg border border-border bg-background/50 text-sm transition-all hover:bg-background/80 group relative overflow-hidden">
+                      {/* Left color bar based on action */}
+                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${getActionColor(e.action).replace('text-', 'bg-').split(' ')[0]}`} />
+                      
+                      <div className="flex-shrink-0 flex flex-col items-center justify-center w-12 text-center border-r border-border pr-4">
+                        <span className="font-mono text-[10px] text-muted-foreground leading-none mb-1">
+                          {e.time.getHours()}:{e.time.getMinutes().toString().padStart(2, '0')}
+                        </span>
+                        <div className={getTypeColor(e.type)}>
+                          {getTypeIcon(e.type)}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`font-bold uppercase text-[11px] tracking-wider ${getActionColor(e.action)}`}>
+                            {e.action}
+                          </span>
+                          <span className="text-foreground font-bold truncate group-hover:text-indigo-400 transition-colors">
+                            {displayName}
+                          </span>
+                          {shortId && (
+                            <span className="font-mono text-[10px] text-muted-foreground opacity-40 ml-1">
+                              #{shortId}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {e.attributes && Object.keys(e.attributes).length > 0 && (
+                          <div className="flex flex-wrap gap-y-1 gap-x-3 mt-1.5">
+                            {Object.entries(e.attributes).map(([key, value]) => {
+                              if (key === 'name') return null;
+                              const interestingKeys = ['image', 'exitCode', 'driver', 'type', 'com.docker.compose.project', 'com.docker.compose.service'];
+                              if (!interestingKeys.includes(key) && !key.startsWith('net.')) return null;
+                              
+                              let label = key;
+                              if (key === 'com.docker.compose.project') label = 'stack';
+                              if (key === 'com.docker.compose.service') label = 'service';
+
+                              return (
+                                <div key={key} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                  <span className="font-semibold opacity-60 uppercase tracking-tighter">{label}:</span>
+                                  <span className="text-foreground/80 truncate max-w-[250px]">{value}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-shrink-0 self-center opacity-20 group-hover:opacity-100 transition-opacity">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted uppercase border border-border">
+                          {e.type}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
           )}
         </CardContent>
       </Card>
@@ -202,29 +363,55 @@ interface StatCardProps {
   subtext: string | React.ReactNode;
   icon: React.ReactNode;
   loading: boolean;
+  chartData?: any[];
+  series?: { key: string; color: string }[];
 }
 
-const StatCard = ({ title, value, subtext, icon, loading }: StatCardProps) => (
-  <Card className="bg-card border-border">
-    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-      <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+const StatCard = memo(({ title, value, subtext, icon, loading, chartData, series }: StatCardProps) => (
+  <Card className="bg-card border-border overflow-hidden relative group transition-colors hover:border-border/80">
+    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 relative z-10 bg-transparent">
+      <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">
         {title}
       </CardTitle>
-      {icon}
+      <div className="opacity-40 group-hover:opacity-100 transition-opacity duration-300">
+        {icon}
+      </div>
     </CardHeader>
-    <CardContent>
+    <CardContent className="relative z-10 bg-transparent">
       {loading ? (
-        <Skeleton className="h-8 w-16 mb-1" />
+        <Skeleton className="h-8 w-24 mb-1" />
       ) : (
-        <div className="text-2xl font-bold text-foreground">
+        <div className="text-2xl font-black text-foreground tracking-tight">
           {value !== undefined ? value : "0"}
         </div>
       )}
-      <div className="text-xs text-muted-foreground mt-1">
+      <div className="text-[11px] text-muted-foreground mt-1 font-medium">
         {loading ? <Skeleton className="h-3 w-32" /> : subtext}
       </div>
     </CardContent>
+    
+    {!loading && chartData && chartData.length > 1 && series && (
+      <div className="absolute bottom-0 left-0 right-0 h-12 opacity-10 group-hover:opacity-25 transition-opacity duration-500 pointer-events-none">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            {series.map((s) => (
+              <Line
+                key={s.key}
+                type="monotone"
+                dataKey={s.key}
+                stroke={s.color}
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    )}
   </Card>
-);
+));
+
+StatCard.displayName = "StatCard";
 
 export default Index;

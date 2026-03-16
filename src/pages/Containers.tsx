@@ -1,7 +1,20 @@
+/*
+ * File: Containers.tsx
+ * Project: docker-native-manager
+ * Created: 2026-03-14
+ * Author: Pedro Farias
+ * 
+ * Last Modified: Mon Mar 16 2026
+ * Modified By: Pedro Farias
+ * 
+ * Copyright (c) 2026 Pedro Farias
+ * License: MIT
+ */
+
 "use client";
 
 import { useDocker } from "@/context/DockerContext";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useDockerEvent } from "@/hooks/use-docker-events";
 import { cn } from "@/lib/utils";
@@ -16,7 +29,7 @@ import {
   execContainer,
   writeStdin
 } from "@/lib/docker";
-import { 
+import {
   Table,
   TableBody,
   TableCell,
@@ -46,12 +59,15 @@ import {
   SquareTerminal as CommandLine,
   RefreshCw,
   Eye,
+  ChevronUp,
+  ChevronDown,
   CheckSquare,
   MoreVertical,
   Copy,
   X,
   Download,
   Clipboard,
+  Plus,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,7 +120,7 @@ const Containers = () => {
   const [inspectData, setInspectData] = useState("");
 
   // Log specific states
-  const [autoRefreshLogs, setAutoRefreshLogs] = useState(false);
+  const [autoRefreshLogs, setAutoRefreshLogs] = useState(true);
   const [wrapLines, setWrapLines] = useState(true);
   const [showTimestamps, setShowTimestamps] = useState(false);
   const [logTimeFilter, setLogTimeFilter] = useState("all"); 
@@ -124,6 +140,8 @@ const Containers = () => {
 
   // Key to force log re-fetch when options change
   const [logsRefreshKey, setLogsRefreshKey] = useState(0);
+  const logScrollRef = useRef<HTMLDivElement>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -217,6 +235,12 @@ const Containers = () => {
     };
   }, [autoRefreshLogs, selectedContainer, fetchLogs, panelMode]);
 
+  useEffect(() => {
+    if (logScrollRef.current && panelMode === "logs") {
+      logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight;
+    }
+  }, [logs, panelMode]);
+
   const openTerminal = (container: Container) => {
     setSelectedContainer(container);
     setPanelMode("terminal");
@@ -295,7 +319,33 @@ const Containers = () => {
                           c.image.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
     return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    if (!sortConfig) return 0;
+    const { key, direction } = sortConfig;
+    let comparison = 0;
+    
+    if (key === 'name') {
+      comparison = a.name.localeCompare(b.name);
+    } else if (key === 'status') {
+      comparison = a.status.localeCompare(b.status);
+    } else if (key === 'image') {
+      comparison = a.image.localeCompare(b.image);
+    } else if (key === 'ip_address') {
+      comparison = (a.ip_address || "").localeCompare(b.ip_address || "");
+    } else if (key === 'created') {
+      comparison = (a.created || 0) - (b.created || 0);
+    }
+    
+    return direction === 'asc' ? comparison : -comparison;
   });
+
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filtered.length) {
@@ -342,37 +392,6 @@ const Containers = () => {
           <p className="text-muted-foreground mt-1">Manage your running and stopped Docker instances.</p>
         </div>
         <div className="flex gap-2">
-          {selectedIds.length > 0 && (
-            <div className="flex gap-2 animate-in fade-in slide-in-from-right-4">
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20"
-                onClick={async () => handleBulkAction((await import("@/lib/docker")).startContainer, "Start")}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Start ({selectedIds.length})
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20"
-                onClick={async () => handleBulkAction((await import("@/lib/docker")).stopContainer, "Stop")}
-              >
-                <Square className="w-4 h-4 mr-2" />
-                Stop ({selectedIds.length})
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-rose-500/10 border-rose-500/20 text-rose-500 hover:bg-rose-500/20"
-                onClick={async () => handleBulkAction((await import("@/lib/docker")).deleteContainer, "Delete")}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete ({selectedIds.length})
-              </Button>
-            </div>
-          )}
           <Button
             variant="outline"
             className="bg-card border-border text-foreground"
@@ -382,11 +401,81 @@ const Containers = () => {
             <RotateCcw className={cn("w-4 h-4 mr-2", isRefreshing && "animate-spin")} />
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
-          <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowCreateDialog(true)}>
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
             Create Container
           </Button>
         </div>
       </div>
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-background/80 backdrop-blur-md border border-border shadow-2xl rounded-full px-6 py-3 flex items-center gap-4">
+            <span className="text-sm font-bold border-r pr-4 mr-2">{selectedIds.length} Selected</span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20 rounded-full"
+                onClick={async () => handleBulkAction((await import("@/lib/docker")).startContainer, "Start")}
+              >
+                <Play className="w-4 h-4 mr-1.5" />
+                Start
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20 rounded-full"
+                onClick={async () => handleBulkAction((await import("@/lib/docker")).stopContainer, "Stop")}
+              >
+                <Square className="w-4 h-4 mr-1.5" />
+                Stop
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-blue-500/10 border-blue-500/20 text-blue-500 hover:bg-blue-500/20 rounded-full"
+                onClick={async () => handleBulkAction((await import("@/lib/docker")).restartContainer, "Restart")}
+              >
+                <RotateCcw className="w-4 h-4 mr-1.5" />
+                Restart
+              </Button>
+              {selectedIds.length === 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-purple-500/10 border-purple-500/20 text-purple-500 hover:bg-purple-500/20 rounded-full"
+                  onClick={() => {
+                    const container = containers.find(c => c.id === selectedIds[0]);
+                    if (container) handleDuplicate(container);
+                  }}
+                >
+                  <Copy className="w-4 h-4 mr-1.5" />
+                  Duplicate
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-rose-500/10 border-rose-500/20 text-rose-500 hover:bg-rose-500/20 rounded-full"
+                onClick={async () => handleBulkAction((await import("@/lib/docker")).deleteContainer, "Delete")}
+              >
+                <Trash2 className="w-4 h-4 mr-1.5" />
+                Delete
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-2 hover:bg-muted rounded-full w-8 h-8 p-0"
+                onClick={() => setSelectedIds([])}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -398,19 +487,22 @@ const Containers = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 h-11">
-          <Filter className="w-4 h-4 text-muted-foreground" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-transparent text-foreground text-sm outline-none cursor-pointer h-full py-2 min-w-[120px]"
-          >
-            <option value="all" className="bg-background">All Status</option>
-            <option value="running" className="bg-background">Running</option>
-            <option value="exited" className="bg-background">Exited</option>
-            <option value="paused" className="bg-background">Paused</option>
-          </select>
-        </div>
+          <div className="flex items-center gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px] bg-card border-border h-11 focus:ring-blue-600">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <SelectValue placeholder="All Status" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="running">Running</SelectItem>
+                <SelectItem value="exited">Exited</SelectItem>
+                <SelectItem value="paused">Paused</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
       </div>
 
       <div className="rounded-xl border border-border bg-card/50 overflow-hidden">
@@ -424,9 +516,61 @@ const Containers = () => {
                   className="border-border data-[state=checked]:bg-blue-600"
                 />
               </TableHead>
-              <TableHead className="text-muted-foreground font-medium">Status</TableHead>
-              <TableHead className="text-muted-foreground font-medium">Name</TableHead>
-              <TableHead className="text-muted-foreground font-medium">Image</TableHead>
+              <TableHead 
+                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => requestSort('status')}
+              >
+                <div className="flex items-center gap-1">
+                  Status
+                  {sortConfig?.key === 'status' && (
+                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => requestSort('name')}
+              >
+                <div className="flex items-center gap-1">
+                  Name
+                  {sortConfig?.key === 'name' && (
+                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => requestSort('image')}
+              >
+                <div className="flex items-center gap-1">
+                  Image
+                  {sortConfig?.key === 'image' && (
+                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => requestSort('ip_address')}
+              >
+                <div className="flex items-center gap-1">
+                  IP Address
+                  {sortConfig?.key === 'ip_address' && (
+                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => requestSort('created')}
+              >
+                <div className="flex items-center gap-1">
+                  Created
+                  {sortConfig?.key === 'created' && (
+                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
+              </TableHead>
               <TableHead className="text-muted-foreground font-medium">Stats</TableHead>
               <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
             </TableRow>
@@ -439,6 +583,8 @@ const Containers = () => {
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                 </TableRow>
@@ -598,16 +744,22 @@ const Containers = () => {
                     variant="outline"
                     size="sm"
                     className="h-8 text-xs gap-1"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!selectedContainer) return;
-                      const visibleLogs = getVisibleLogs();
-                      const element = document.createElement("a");
-                      const file = new Blob([visibleLogs], { type: 'text/plain' });
-                      element.href = URL.createObjectURL(file);
-                      element.download = `${selectedContainer.name}-logs.txt`;
-                      document.body.appendChild(element);
-                      element.click();
-                      document.body.removeChild(element);
+                      try {
+                        const visibleLogs = getVisibleLogs();
+                        const filePath = await save({
+                          defaultPath: `${selectedContainer.name}-logs.txt`,
+                          filters: [{ name: 'Text', extensions: ['txt'] }]
+                        });
+                        
+                        if (filePath) {
+                          await writeTextFile(filePath, visibleLogs);
+                          showSuccess("Logs saved successfully");
+                        }
+                      } catch (err) {
+                        showError(`Failed to save logs: ${err}`);
+                      }
                     }}
                   >
                     <Download className="h-3.5 w-3.5" /> Download
@@ -627,10 +779,13 @@ const Containers = () => {
                 </div>
 
                 {/* Logs Display */}
-                <div className={cn(
-                  "bg-card rounded-lg p-4 font-mono text-xs overflow-auto border border-border h-full",
-                  wrapLines ? "whitespace-pre-wrap" : "whitespace-pre"
-                )}>
+                <div 
+                  ref={logScrollRef}
+                  className={cn(
+                    "bg-card rounded-lg p-4 font-mono text-xs overflow-auto border border-border h-full",
+                    wrapLines ? "whitespace-pre-wrap" : "whitespace-pre"
+                  )}
+                >
                   {getVisibleLogs() || (logs === "Loading logs..." ? "Loading logs..." : "No logs available.")}
                 </div>
               </div>
@@ -706,10 +861,10 @@ const Containers = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="border-rose-900/50 text-rose-500 hover:bg-rose-950/30 hover:text-rose-400" onClick={() => setShowCreateDialog(false)} disabled={isCreating}>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={isCreating}>
               Cancel
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-foreground" onClick={handleCreate} disabled={isCreating || !newImage}>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleCreate} disabled={isCreating || !newImage}>
               {isCreating ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
@@ -783,6 +938,10 @@ const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDup
       </TableCell>
       <TableCell className="font-semibold text-foreground">{container.name}</TableCell>
       <TableCell className="text-muted-foreground text-xs font-mono">{container.image}</TableCell>
+      <TableCell className="text-muted-foreground text-xs font-mono">{container.ip_address || "-"}</TableCell>
+      <TableCell className="text-muted-foreground text-xs">
+        {container.created ? new Date(container.created * 1000).toLocaleString() : "-"}
+      </TableCell>
       <TableCell className="text-muted-foreground text-xs font-mono">
         {stats ? (
           <div className="flex flex-col gap-1">
@@ -846,7 +1005,8 @@ const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDup
   );
 };
 
-import { useRef } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { useTheme } from "next-themes";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";

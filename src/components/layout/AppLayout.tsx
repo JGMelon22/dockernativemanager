@@ -1,15 +1,72 @@
+/*
+ * File: AppLayout.tsx
+ * Project: docker-native-manager
+ * Created: 2026-03-13
+ * 
+ * Last Modified: Mon Mar 16 2026
+ * Modified By: Pedro Farias
+ * 
+ */
+
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import Sidebar from "./Sidebar";
 import { X, Minus, Square } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
+  const [isMaximized, setIsMaximized] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    let unlisten: () => void;
+    
+    const setupListener = async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      
+      const updateMaximized = async () => {
+        const maximized = await win.isMaximized();
+        setIsMaximized(maximized);
+        if (maximized) {
+          document.documentElement.classList.add("maximized");
+        } else {
+          document.documentElement.classList.remove("maximized");
+        }
+      };
+
+      // Initial state
+      await updateMaximized();
+
+      // Listen for resize events to detect maximization
+      const unlistenResized = await win.onResized(async () => {
+        await updateMaximized();
+      });
+      
+      unlisten = unlistenResized;
+    };
+
+    setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   return (
     <div
-      className="flex h-screen bg-background border border-border/50 rounded-xl overflow-hidden shadow-2xl transition-colors duration-300"
+      id="root-container"
+      className="flex h-screen w-full bg-background overflow-hidden transition-colors duration-300 relative"
     >
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
         {/* Full Header Drag Handle */}
         <div
           data-tauri-drag-region
@@ -71,7 +128,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto relative">
+        <div ref={scrollRef} className="flex-1 overflow-auto relative">
           {children}
         </div>
       </main>

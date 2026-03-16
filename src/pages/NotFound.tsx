@@ -1,3 +1,16 @@
+/*
+ * File: NotFound.tsx
+ * Project: docker-native-manager
+ * Created: 2026-03-13
+ * Author: Pedro Farias
+ * 
+ * Last Modified: Sun Mar 15 2026
+ * Modified By: Pedro Farias
+ * 
+ * Copyright (c) 2026 Pedro Farias
+ * License: MIT
+ */
+
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 

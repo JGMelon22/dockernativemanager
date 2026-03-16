@@ -1,3 +1,13 @@
+/*
+ * File: docker.ts
+ * Project: docker-native-manager
+ * Created: 2026-03-13
+ * 
+ * Last Modified: Mon Mar 16 2026
+ * Modified By: Pedro Farias
+ * 
+ */
+
 "use client";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -12,6 +22,8 @@ export interface Container {
   status: string;
   state: string;
   ports: string;
+  created: number;
+  ip_address: string;
   labels: Record<string, string>;
 }
 
@@ -27,12 +39,17 @@ export interface Image {
   tag: string;
   size: string;
   created: string;
+  created_at: string; // Added created_at field
 }
 
 export interface Volume {
   name: string;
   driver: string;
   mountpoint: string;
+  created_at: string;
+  labels: Record<string, string>;
+  size: number;
+  usage_count: number;
 }
 
 export interface Network {
@@ -46,24 +63,26 @@ export interface Stack {
   name: string;
   status: string;
   services: number;
+  created: number;
+  updated: number;
 }
 
 // MOCK DATA for Web Preview
 const MOCK_CONTAINERS: Container[] = [
-  { id: "c1", name: "nginx-proxy", image: "nginx:latest", status: "running", state: "Up 2 hours", ports: "80:80, 443:443", labels: {} },
-  { id: "c2", name: "postgres-db", image: "postgres:15-alpine", status: "running", state: "Up 5 hours", ports: "5432:5432", labels: {} },
-  { id: "c3", name: "redis-cache", image: "redis:7", status: "exited", state: "Exited (0) 10 mins ago", ports: "6379", labels: {} },
+  { id: "c1", name: "nginx-proxy", image: "nginx:latest", status: "running", state: "Up 2 hours", ports: "80:80, 443:443", created: 1710550000, ip_address: "172.17.0.2", labels: {} },
+  { id: "c2", name: "postgres-db", image: "postgres:15-alpine", status: "running", state: "Up 5 hours", ports: "5432:5432", created: 1710540000, ip_address: "172.17.0.3", labels: {} },
+  { id: "c3", name: "redis-cache", image: "redis:7", status: "exited", state: "Exited (0) 10 mins ago", ports: "6379", created: 1710530000, ip_address: "172.17.0.4", labels: {} },
 ];
 
 const MOCK_IMAGES: Image[] = [
-  { id: "sha256:1", repository: "nginx", tag: "latest", size: "142MB", created: "2 weeks ago" },
-  { id: "sha256:2", repository: "postgres", tag: "15-alpine", size: "230MB", created: "1 month ago" },
-  { id: "sha256:3", repository: "node", tag: "20-slim", size: "180MB", created: "3 days ago" },
+  { id: "sha256:1", repository: "nginx", tag: "latest", size: "142MB", created: "2 weeks ago", created_at: "2024-02-29T10:00:00Z" },
+  { id: "sha256:2", repository: "postgres", tag: "15-alpine", size: "230MB", created: "1 month ago", created_at: "2024-02-15T12:00:00Z" },
+  { id: "sha256:3", repository: "node", tag: "20-slim", size: "180MB", created: "3 days ago", created_at: "2024-03-12T08:00:00Z" },
 ];
 
 const MOCK_VOLUMES: Volume[] = [
-  { name: "db_data", driver: "local", mountpoint: "/var/lib/docker/volumes/db_data/_data" },
-  { name: "cache_data", driver: "local", mountpoint: "/var/lib/docker/volumes/cache_data/_data" },
+  { name: "db_data", driver: "local", mountpoint: "/var/lib/docker/volumes/db_data/_data", created_at: "2023-10-20T10:00:00Z", labels: {}, size: 104857600, usage_count: 1 },
+  { name: "cache_data", driver: "local", mountpoint: "/var/lib/docker/volumes/cache_data/_data", created_at: "2023-10-21T12:00:00Z", labels: { "project": "demo" }, size: 52428800, usage_count: 0 },
 ];
 
 const MOCK_NETWORKS: Network[] = [
@@ -128,14 +147,24 @@ export const deleteImage = async (id: string) => {
   return await invoke("delete_image", { id });
 };
 
+export const getVolumeContainers = async (name: string): Promise<string[]> => {
+  if (!isTauri) return ["container-1", "container-2"];
+  return await invoke("get_volume_containers", { name });
+};
+
 export const deleteVolume = async (name: string) => {
   if (!isTauri) return console.log("Mock: Deleting volume", name);
   return await invoke("delete_volume", { name });
 };
 
-export const createVolume = async (name: string) => {
-  if (!isTauri) return console.log("Mock: Creating volume", name);
-  return await invoke("create_volume", { name });
+export const createVolume = async (name: string, driver?: string, labels?: Record<string, string>) => {
+  if (!isTauri) return console.log("Mock: Creating volume", name, driver, labels);
+  return await invoke("create_volume", { name, driver: driver || "local", labels: labels || {} });
+};
+
+export const pruneVolumes = async (): Promise<string> => {
+  if (!isTauri) return "Mock: Pruned volumes. Reclaimed 50MB.";
+  return await invoke("prune_volumes");
 };
 
 export const deleteNetwork = async (id: string) => {
@@ -143,14 +172,40 @@ export const deleteNetwork = async (id: string) => {
   return await invoke("delete_network", { id });
 };
 
-export const createNetwork = async (name: string) => {
-  if (!isTauri) return console.log("Mock: Creating network", name);
-  return await invoke("create_network", { name });
+export const createNetwork = async (
+  name: string,
+  driver: string = "bridge",
+  internal: boolean = false,
+  attachable: boolean = false,
+  labels: Record<string, string> = {}
+) => {
+  if (!isTauri) return console.log("Mock: Creating network", name, driver, internal, attachable, labels);
+  return await invoke("create_network", { name, driver, internal, attachable, labels });
+};
+
+export const pruneNetworks = async (): Promise<string> => {
+  if (!isTauri) return "Mock: Pruned networks. Deleted 2 unused networks.";
+  return await invoke("prune_networks");
+};
+
+export const connectContainerToNetwork = async (networkId: string, containerId: string) => {
+  if (!isTauri) return console.log("Mock: Connecting container", containerId, "to network", networkId);
+  return await invoke("connect_container_to_network", { networkId, containerId });
+};
+
+export const disconnectContainerFromNetwork = async (networkId: string, containerId: string, force: boolean = false) => {
+  if (!isTauri) return console.log("Mock: Disconnecting container", containerId, "from network", networkId);
+  return await invoke("disconnect_container_from_network", { networkId, containerId, force });
 };
 
 export const pullImage = async (image: string) => {
   if (!isTauri) return console.log("Mock: Pulling image", image);
   return await invoke("pull_image", { image });
+};
+
+export const pruneImages = async (): Promise<string> => {
+  if (!isTauri) return "Mock: Pruned images. Reclaimed 100MB.";
+  return await invoke("prune_images");
 };
 
 export const getContainerLogs = async (
@@ -169,7 +224,7 @@ export const getContainerStats = async (id: string): Promise<ContainerStats> => 
 };
 
 export const getStacks = async (): Promise<Stack[]> => {
-  if (!isTauri) return [{ name: "my-app", status: "running", services: 3 }];
+  if (!isTauri) return [{ name: "my-app", status: "running", services: 3, created: 1710550000, updated: 1710555000 }];
   return await invoke("get_stacks");
 };
 
@@ -186,6 +241,36 @@ export const removeStack = async (name: string): Promise<void> => {
 export const getStackCompose = async (name: string): Promise<string> => {
   if (!isTauri) return "version: '3'\nservices:\n  web:\n    image: nginx";
   return await invoke("get_stack_compose", { name });
+};
+
+export const updateStack = async (name: string): Promise<void> => {
+  if (!isTauri) return console.log("Mock: Updating stack", name);
+  return await invoke("update_stack", { name });
+};
+
+export const startStack = async (name: string): Promise<void> => {
+  if (!isTauri) return console.log("Mock: Starting stack", name);
+  return await invoke("start_stack", { name });
+};
+
+export const stopStack = async (name: string): Promise<void> => {
+  if (!isTauri) return console.log("Mock: Stopping stack", name);
+  return await invoke("stop_stack", { name });
+};
+
+export const restartStack = async (name: string): Promise<void> => {
+  if (!isTauri) return console.log("Mock: Restarting stack", name);
+  return await invoke("restart_stack", { name });
+};
+
+export const getStackLogs = async (name: string, tail?: number | null): Promise<string> => {
+  if (!isTauri) return "Mock stack logs content...";
+  return await invoke("get_stack_logs", { name, tail: tail ?? null });
+};
+
+export const scaleStackService = async (name: string, service: string, scale: number): Promise<void> => {
+  if (!isTauri) return console.log("Mock: Scaling service", name, service, scale);
+  return await invoke("scale_stack_service", { name, service, scale });
 };
 
 export const dockerSystemPrune = async (): Promise<string> => {
@@ -221,6 +306,10 @@ export interface SystemInfo {
   images: number;
   version: string;
   operating_system: string;
+  kernel_version: string;
+  storage_driver: string;
+  logging_driver: string;
+  architecture: string;
   ncpu: number;
   mem_total: number;
 }
@@ -234,6 +323,10 @@ export const getSystemInfo = async (): Promise<SystemInfo> => {
     images: 12,
     version: "24.0.7",
     operating_system: "Docker Desktop (Mock)",
+    kernel_version: "5.15.0-mock",
+    storage_driver: "overlay2",
+    logging_driver: "json-file",
+    architecture: "x86_64",
     ncpu: 8,
     mem_total: 16000000000
   };
