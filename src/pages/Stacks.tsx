@@ -101,8 +101,7 @@ import {
 const COMPOSE_TEMPLATES = [
   {
     name: "Nginx",
-    content: `version: '3'
-services:
+    content: `services:
   web:
     image: nginx:latest
     ports:
@@ -111,8 +110,7 @@ services:
   },
   {
     name: "Redis",
-    content: `version: '3'
-services:
+    content: `services:
   cache:
     image: redis:alpine
     ports:
@@ -121,8 +119,7 @@ services:
   },
   {
     name: "PostgreSQL",
-    content: `version: '3'
-services:
+    content: `services:
   db:
     image: postgres:15-alpine
     environment:
@@ -138,8 +135,7 @@ volumes:
   },
   {
     name: "MongoDB",
-    content: `version: '3'
-services:
+    content: `services:
   mongodb:
     image: mongo:latest
     environment:
@@ -158,7 +154,9 @@ const Stacks = () => {
   const { 
     stacks, 
     loading, 
-    refreshStacks 
+    refreshStacks,
+    deployingStacks,
+    deployStackBackground
   } = useDocker();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -170,7 +168,27 @@ const Stacks = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState("");
   const [composeContent, setComposeContent] = useState("");
+  const [envContent, setEnvContent] = useState<string | null>(null);
   const [isDeploying, setIsDeploying] = useState(false);
+
+  const handleEnvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (!file.name.endsWith(".env")) {
+        showError("Please upload a .env file.");
+        event.target.value = ""; // Clear the file input
+        setEnvContent(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setEnvContent(e.target?.result as string);
+      };
+      reader.readAsText(file);
+    } else {
+      setEnvContent(null);
+    }
+  };
   const [selectedStack, setSelectedStack] = useState<Stack | null>(null);
   const [stackContainers, setStackContainers] = useState<any[]>([]);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -240,22 +258,22 @@ const Stacks = () => {
 
   const handleDeploy = async () => {
     if (!newName || !composeContent) return;
-    setIsDeploying(true);
-    try {
-      await deployStack(newName, composeContent);
-      showSuccess(`Stack ${newName} deployment initiated`);
-      setShowDeployDialog(false);
-      setNewName("");
-      setComposeContent("");
-      refreshStacks();
-    } catch (err) {
-      showError(`Error deploying stack: ${err}`);
-    } finally {
-      setIsDeploying(false);
+    
+    // Close dialog immediately and clear inputs
+    setShowDeployDialog(false);
+    
+    // If we are editing, we can still use background deploy or create a separate one.
+    // Let's use the background one for both since it just calls deploy_stack.
+    await deployStackBackground(newName, composeContent, envContent);
+    
+    if (isEditing) {
+      setIsEditing(false);
     }
+    setNewName("");
+    setComposeContent("");
   };
 
-  const isInitialLoading = loading.stacks && stacks.length === 0;
+  const isInitialLoading = loading.stacks && stacks.length === 0 && Object.keys(deployingStacks).length === 0;
 
   const handleEdit = async (stack: Stack) => {
     try {
@@ -287,7 +305,22 @@ const Stacks = () => {
     }
   };
 
-  const filtered = stacks.filter(s => {
+  const deployingStackList = Object.entries(deployingStacks).map(([name, data]) => {
+    return {
+      name,
+      status: data.status,
+      services: 0, // Unknown until deployed
+      created: Date.now() / 1000,
+      updated: Date.now() / 1000,
+      isDeploying: true,
+    };
+  }).filter(s => 
+    s.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const combinedStacks = [...deployingStackList, ...stacks];
+
+  const filtered = combinedStacks.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -492,7 +525,12 @@ const Stacks = () => {
               <RotateCcw className={cn("w-4 h-4 mr-2", isRefreshing && "animate-spin")} />
               {isRefreshing ? "Refreshing..." : "Refresh"}
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setShowDeployDialog(true)}>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => {
+              setIsEditing(false);
+              setNewName("");
+              setComposeContent("");
+              setShowDeployDialog(true);
+            }}>
               <Plus className="w-4 h-4 mr-2" />
               Deploy Stack
             </Button>
@@ -679,16 +717,27 @@ const Stacks = () => {
                     <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                   </TableRow>
                 ))
-              ) : filtered.length > 0 ? (
+              ) : (filtered.length > 0 || Object.keys(deployingStacks).length > 0) ? (
                 filtered.map((s) => (
-                  <TableRow key={s.name} className="border-border hover:bg-muted transition-colors">
+                  <TableRow
+                    key={s.name}
+                    className={cn(
+                      "border-border hover:bg-muted transition-colors",
+                      s.isDeploying && "bg-blue-500/5 animate-pulse",
+                      selectedIds.includes(s.name) && !s.isDeploying && "bg-muted"
+                    )}
+                  >
                     <TableCell>
-                      <Checkbox
-                        checked={selectedIds.includes(s.name)}
-                        onCheckedChange={() => toggleSelect(s.name)}
-                        className="border-border data-[state=checked]:bg-blue-600"
-                        aria-label={`Select ${s.name}`}
-                      />
+                      {s.isDeploying ? (
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Checkbox
+                          checked={selectedIds.includes(s.name)}
+                          onCheckedChange={() => toggleSelect(s.name)}
+                          className="border-border data-[state=checked]:bg-blue-600"
+                          aria-label={`Select ${s.name}`}
+                        />
+                      )}
                     </TableCell>
                     <TableCell className="font-semibold text-foreground">
                       <div className="flex items-center gap-2">
@@ -701,6 +750,8 @@ const Stacks = () => {
                         "px-2 py-0.5 text-[10px] font-mono uppercase border font-semibold",
                         s.status === "running"
                           ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                          : s.isDeploying
+                          ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
                           : "bg-amber-500/10 text-amber-500 border-amber-500/20"
                       )}>
                         {s.status}
@@ -709,61 +760,67 @@ const Stacks = () => {
                     <TableCell className="text-muted-foreground text-sm">
                       <div className="flex items-center gap-2">
                         <Activity className="w-3 h-3" />
-                        {s.services} services
+                        {s.isDeploying ? "Deploying..." : `${s.services} services`}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {s.created ? new Date(s.created * 1000).toLocaleString() : "-"}
+                      {s.isDeploying ? "Just now" : (s.created ? new Date(s.created * 1000).toLocaleString() : "-")}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {s.updated ? new Date(s.updated * 1000).toLocaleString() : "-"}
+                      {s.isDeploying ? "Just now" : (s.updated ? new Date(s.updated * 1000).toLocaleString() : "-")}
                     </TableCell>
                     <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-[160px] bg-card border-border">
-                          <DropdownMenuLabel className="text-muted-foreground">Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => openStackDetails(s)}>
-                            <Eye className="mr-2 h-4 w-4 text-emerald-500" />
-                            <span>View Details</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleEdit(s)}>
-                            <Layers className="mr-2 h-4 w-4 text-indigo-500" />
-                            <span>Edit Stack</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleUpdateStack(s.name)}>
-                            <RefreshCw className={cn("mr-2 h-4 w-4 text-blue-500", isUpdating && "animate-spin")} />
-                            <span>Update</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleViewLogs(s.name)}>
-                            <Terminal className="mr-2 h-4 w-4 text-amber-500" />
-                            <span>View Logs</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-border" />
-                          <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleStackAction(s.name, 'start')}>
-                            <Play className="mr-2 h-4 w-4 text-emerald-500 fill-current" />
-                            <span>Start</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleStackAction(s.name, 'stop')}>
-                            <Square className="mr-2 h-4 w-4 text-amber-500 fill-current" />
-                            <span>Stop</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleStackAction(s.name, 'restart')}>
-                            <RotateCcw className="mr-2 h-4 w-4 text-blue-500" />
-                            <span>Restart</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-border" />
-                          <DropdownMenuItem onClick={() => handleDelete(s.name)} className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            <span>Delete Stack</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {s.isDeploying ? (
+                        <Button variant="ghost" size="sm" disabled className="h-8 w-8 p-0 opacity-50">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-[160px] bg-card border-border">
+                            <DropdownMenuLabel className="text-muted-foreground">Actions</DropdownMenuLabel>
+                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => openStackDetails(s)}>
+                              <Eye className="mr-2 h-4 w-4 text-emerald-500" />
+                              <span>View Details</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleEdit(s)}>
+                              <Layers className="mr-2 h-4 w-4 text-indigo-500" />
+                              <span>Edit Stack</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleUpdateStack(s.name)}>
+                              <RefreshCw className={cn("mr-2 h-4 w-4 text-blue-500", isUpdating && "animate-spin")} />
+                              <span>Update</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleViewLogs(s.name)}>
+                              <Terminal className="mr-2 h-4 w-4 text-amber-500" />
+                              <span>View Logs</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-border" />
+                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleStackAction(s.name, 'start')}>
+                              <Play className="mr-2 h-4 w-4 text-emerald-500 fill-current" />
+                              <span>Start</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleStackAction(s.name, 'stop')}>
+                              <Square className="mr-2 h-4 w-4 text-amber-500 fill-current" />
+                              <span>Stop</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleStackAction(s.name, 'restart')}>
+                              <RotateCcw className="mr-2 h-4 w-4 text-blue-500" />
+                              <span>Restart</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-border" />
+                            <DropdownMenuItem onClick={() => handleDelete(s.name)} className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              <span>Delete Stack</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -1089,7 +1146,7 @@ const Stacks = () => {
           setComposeContent("");
         }
       }}>
-        <DialogContent className="bg-background border-border text-foreground max-w-2xl">
+        <DialogContent className="bg-background border-border text-foreground max-w-2xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit Stack" : "Deploy New Stack"}</DialogTitle>
           </DialogHeader>
@@ -1097,7 +1154,7 @@ const Stacks = () => {
             {!isEditing && (
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-widest text-muted-foreground">Select Template</Label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-6 gap-2">
                   {COMPOSE_TEMPLATES.map((t) => (
                     <Button
                       key={t.name}
@@ -1152,6 +1209,26 @@ const Stacks = () => {
                   }}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="env-file">Upload .env file (optional)</Label>
+              <Input
+                id="env-file"
+                type="file"
+                accept=".env"
+                className="bg-card border-border text-foreground file:text-blue-600 file:font-semibold file:cursor-pointer"
+                onChange={handleEnvFileChange}
+                disabled={isDeploying}
+              />
+              {envContent && (
+                <div className="flex items-center text-sm text-muted-foreground">
+                  .env file loaded.
+                  <Button variant="link" size="sm" onClick={() => setEnvContent(null)} className="text-red-500 hover:text-red-600">
+                    Remove
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

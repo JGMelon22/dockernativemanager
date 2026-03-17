@@ -59,9 +59,10 @@ pub async fn get_stacks() -> Result<Vec<StackInfo>, String> {
 }
 
 #[tauri::command]
-pub async fn deploy_stack(app: AppHandle, name: String, compose_content: String) -> Result<(), String> {
+pub async fn deploy_stack(app: AppHandle, name: String, compose_content: String, env_content: Option<String>) -> Result<(), String> {
     use std::io::Write;
     use tauri::Manager;
+    use uuid::Uuid;
 
     let app_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     let stacks_dir = app_dir.join("stacks");
@@ -72,16 +73,33 @@ pub async fn deploy_stack(app: AppHandle, name: String, compose_content: String)
     let mut file = std::fs::File::create(&compose_file).map_err(|e| e.to_string())?;
     file.write_all(compose_content.as_bytes()).map_err(|e| e.to_string())?;
 
-    let output = std::process::Command::new("docker")
-        .arg("compose")
+    let mut cmd = std::process::Command::new("docker");
+    cmd.arg("compose")
         .arg("-p")
         .arg(&name)
         .arg("-f")
-        .arg(&compose_file)
+        .arg(&compose_file);
+
+    let mut temp_env_file: Option<std::path::PathBuf> = None;
+    if let Some(env_c) = env_content {
+        let env_filename = format!(".env.{}", Uuid::new_v4());
+        let env_file_path = stacks_dir.join(env_filename);
+        let mut env_file = std::fs::File::create(&env_file_path).map_err(|e| e.to_string())?;
+        env_file.write_all(env_c.as_bytes()).map_err(|e| e.to_string())?;
+        cmd.arg("--env-file").arg(&env_file_path);
+        temp_env_file = Some(env_file_path);
+    }
+
+    let output = cmd
         .arg("up")
         .arg("-d")
         .output()
         .map_err(|e| e.to_string())?;
+
+    // Clean up temporary .env file
+    if let Some(path) = temp_env_file {
+        let _ = std::fs::remove_file(path);
+    }
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());

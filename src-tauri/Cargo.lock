@@ -675,7 +675,7 @@ dependencies = [
 
 [[package]]
 name = "docker-native-manager"
-version = "1.5.2"
+version = "1.5.4"
 dependencies = [
  "bollard",
  "chrono",
@@ -688,6 +688,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

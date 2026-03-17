@@ -22,6 +22,7 @@ import {
   getNetworks, 
   getSystemInfo,
   pullImage,
+  deployStack,
   manageDockerService,
   Container,
   Stack,
@@ -74,6 +75,8 @@ interface DockerContextType {
   refreshSystemInfo: () => Promise<void>;
   pullingImages: Record<string, { status: string; progress: number | null }>;
   pullImageBackground: (imageName: string) => Promise<void>;
+  deployingStacks: Record<string, { status: string }>;
+  deployStackBackground: (name: string, composeContent: string, envContent: string | null) => Promise<void>;
   manageService: (action: 'start' | 'stop' | 'restart' | 'reconnect') => Promise<void>;
 }
 
@@ -92,6 +95,7 @@ export const DockerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnected, setIsConnected] = useState<boolean>(true);
   const [isManagingService, setIsManagingService] = useState<boolean>(false);
   const [pullingImages, setPullingImages] = useState<Record<string, { status: string; progress: number | null }>>({});
+  const [deployingStacks, setDeployingStacks] = useState<Record<string, { status: string }>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({
     containers: true,
     stacks: true,
@@ -250,6 +254,29 @@ export const DockerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [pullingImages, refreshImages]);
 
+  const deployStackBackground = useCallback(async (name: string, composeContent: string, envContent: string | null) => {
+    if (deployingStacks[name]) return;
+
+    setDeployingStacks(prev => ({
+      ...prev,
+      [name]: { status: 'Deploying...' }
+    }));
+
+    try {
+      await deployStack(name, composeContent, envContent);
+      showSuccess(`Stack ${name} deployed successfully`);
+      refreshStacks();
+    } catch (err) {
+      showError(`Failed to deploy stack ${name}: ${err}`);
+    } finally {
+      setDeployingStacks(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+  }, [deployingStacks, refreshStacks]);
+
   const manageService = useCallback(async (action: 'start' | 'stop' | 'restart' | 'reconnect') => {
     setIsManagingService(true);
     setLoading(prev => ({ ...prev, systemInfo: true }));
@@ -400,6 +427,8 @@ export const DockerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       refreshSystemInfo,
       pullingImages,
       pullImageBackground,
+      deployingStacks,
+      deployStackBackground,
       manageService,
     }}>
       {children}

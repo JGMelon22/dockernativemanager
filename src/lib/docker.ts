@@ -3,7 +3,7 @@
  * Project: docker-native-manager
  * Created: 2026-03-13
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  */
@@ -65,6 +65,7 @@ export interface Stack {
   services: number;
   created: number;
   updated: number;
+  isDeploying?: boolean;
 }
 
 // MOCK DATA for Web Preview
@@ -228,9 +229,9 @@ export const getStacks = async (): Promise<Stack[]> => {
   return await invoke("get_stacks");
 };
 
-export const deployStack = async (name: string, composeContent: string): Promise<void> => {
-  if (!isTauri) return console.log("Mock: Deploying stack", name);
-  await invoke("deploy_stack", { name, composeContent });
+export const deployStack = async (name: string, composeContent: string, envContent: string | null): Promise<void> => {
+  if (!isTauri) return console.log("Mock: Deploying stack", name, envContent ? "with .env" : "without .env");
+  await invoke("deploy_stack", { name, composeContent, envContent });
 };
 
 export const removeStack = async (name: string): Promise<void> => {
