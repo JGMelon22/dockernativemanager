@@ -27,8 +27,18 @@ use bollard::exec::{CreateExecOptions, StartExecResults};
 use tokio::sync::mpsc;
 use tokio::io::AsyncWriteExt;
 use chrono::{TimeZone, Local};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static IS_STOPPED_INTENTIONALLY: AtomicBool = AtomicBool::new(false);
 
 type TerminalSenders = Mutex<HashMap<String, mpsc::Sender<String>>>;
+
+fn get_docker() -> Result<Docker, String> {
+    if IS_STOPPED_INTENTIONALLY.load(Ordering::SeqCst) {
+        return Err("Docker is intentionally stopped".into());
+    }
+    Docker::connect_with_local_defaults().map_err(|e| e.to_string())
+}
 
 #[derive(Serialize, Clone)]
 struct HostStats {
@@ -94,7 +104,7 @@ struct StackInfo {
 
 #[tauri::command]
 async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let containers = docker
         .list_containers(Some(ListContainersOptions::<String> {
             all: true,
@@ -141,7 +151,7 @@ async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
 
 #[tauri::command]
 async fn get_images() -> Result<Vec<ImageInfo>, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let images = docker
         .list_images(Some(ListImagesOptions::<String> {
             all: true,
@@ -172,25 +182,25 @@ async fn get_images() -> Result<Vec<ImageInfo>, String> {
 
 #[tauri::command]
 async fn start_container(id: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     docker.start_container(&id, None::<StartContainerOptions<String>>).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn stop_container(id: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     docker.stop_container(&id, None::<StopContainerOptions>).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn restart_container(id: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     docker.restart_container(&id, None::<RestartContainerOptions>).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn delete_container(id: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     docker.remove_container(&id, None::<RemoveContainerOptions>).await.map_err(|e| e.to_string())
 }
 
@@ -202,7 +212,7 @@ async fn create_container(
     envs: Vec<String>,
     volumes: Vec<String>,
 ) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
 
     let options = if name.trim().is_empty() {
         None
@@ -271,14 +281,14 @@ async fn create_container(
 
 #[tauri::command]
 async fn delete_image(id: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     docker.remove_image(&id, None::<RemoveImageOptions>, None).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 async fn pull_image(app_handle: AppHandle, image: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     
     let full_image = if image.contains(':') {
         image
@@ -312,7 +322,7 @@ async fn pull_image(app_handle: AppHandle, image: String) -> Result<(), String> 
 
 #[tauri::command]
 async fn get_volumes() -> Result<Vec<VolumeInfo>, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let volumes = docker.list_volumes(None::<ListVolumesOptions<String>>).await.map_err(|e| e.to_string())?;
     
     Ok(volumes.volumes.unwrap_or_default().into_iter().map(|v| {
@@ -331,7 +341,7 @@ async fn get_volumes() -> Result<Vec<VolumeInfo>, String> {
 
 #[tauri::command]
 async fn get_volume_containers(name: String) -> Result<Vec<String>, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let containers = docker
         .list_containers(Some(ListContainersOptions::<String> {
             all: true,
@@ -353,7 +363,7 @@ async fn get_volume_containers(name: String) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 async fn prune_volumes() -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let result = docker.prune_volumes(None::<bollard::volume::PruneVolumesOptions<String>>).await.map_err(|e| e.to_string())?;
     
     let reclaimed = result.space_reclaimed.unwrap_or(0);
@@ -364,7 +374,7 @@ async fn prune_volumes() -> Result<String, String> {
 
 #[tauri::command]
 async fn get_networks() -> Result<Vec<NetworkInfo>, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let networks = docker.list_networks(None::<ListNetworksOptions<String>>).await.map_err(|e| e.to_string())?;
     
     Ok(networks.into_iter().map(|n| NetworkInfo {
@@ -377,13 +387,13 @@ async fn get_networks() -> Result<Vec<NetworkInfo>, String> {
 
 #[tauri::command]
 async fn delete_volume(name: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     docker.remove_volume(&name, None::<RemoveVolumeOptions>).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn create_volume(name: String, driver: String, labels: HashMap<String, String>) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let options = CreateVolumeOptions {
         name,
         driver,
@@ -396,13 +406,13 @@ async fn create_volume(name: String, driver: String, labels: HashMap<String, Str
 
 #[tauri::command]
 async fn delete_network(id: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     docker.remove_network(&id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn create_network(name: String, driver: String, internal: bool, attachable: bool, labels: HashMap<String, String>) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let options = CreateNetworkOptions {
         name,
         driver,
@@ -417,7 +427,7 @@ async fn create_network(name: String, driver: String, internal: bool, attachable
 
 #[tauri::command]
 async fn connect_container_to_network(network_id: String, container_id: String) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let options = ConnectNetworkOptions {
         container: container_id,
         ..Default::default()
@@ -427,7 +437,7 @@ async fn connect_container_to_network(network_id: String, container_id: String) 
 
 #[tauri::command]
 async fn disconnect_container_from_network(network_id: String, container_id: String, force: bool) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let options = DisconnectNetworkOptions {
         container: container_id,
         force,
@@ -437,7 +447,7 @@ async fn disconnect_container_from_network(network_id: String, container_id: Str
 
 #[tauri::command]
 async fn prune_networks() -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let result = docker.prune_networks(None::<PruneNetworksOptions<String>>).await.map_err(|e| e.to_string())?;
     
     let count = result.networks_deleted.unwrap_or_default().len();
@@ -451,7 +461,7 @@ async fn get_container_logs(
     tail: Option<usize>,
     since: Option<u64>, // Unix timestamp in seconds
 ) -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
 
     let logs_options = LogsOptions {
         follow: false,
@@ -482,7 +492,7 @@ struct ContainerStats {
 
 #[tauri::command]
 async fn get_container_stats(id: String) -> Result<ContainerStats, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     
     let mut stats_stream = docker.stats(&id, Some(StatsOptions {
         stream: false,
@@ -526,7 +536,7 @@ async fn get_container_stats(id: String) -> Result<ContainerStats, String> {
 
 #[tauri::command]
 async fn get_stacks() -> Result<Vec<StackInfo>, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let containers = docker
         .list_containers(Some(ListContainersOptions::<String> {
             all: true,
@@ -778,7 +788,7 @@ use bollard::image::PruneImagesOptions;
 
 #[tauri::command]
 async fn prune_images() -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let result = docker.prune_images(None::<PruneImagesOptions<String>>).await.map_err(|e| e.to_string())?;
     
     let reclaimed = result.space_reclaimed.unwrap_or(0);
@@ -805,14 +815,14 @@ async fn docker_system_prune() -> Result<String, String> {
 
 #[tauri::command]
 async fn inspect_container(id: String) -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let inspect = docker.inspect_container(&id, None::<InspectContainerOptions>).await.map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn inspect_image(id: String) -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let inspect = docker.inspect_image(&id).await.map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
 }
@@ -825,7 +835,7 @@ async fn exec_container(
     shell: String,
     user: Option<String>,
 ) -> Result<(), String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
 
     let shell_path = match shell.as_str() {
         "bash" => "/bin/bash",
@@ -900,14 +910,14 @@ async fn write_stdin(
 
 #[tauri::command]
 async fn inspect_volume(name: String) -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let inspect = docker.inspect_volume(&name).await.map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn inspect_network(id: String) -> Result<String, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let inspect = docker.inspect_network(&id, None::<InspectNetworkOptions<String>>).await.map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
 }
@@ -931,7 +941,7 @@ struct SystemInfo {
 
 #[tauri::command]
 async fn get_system_info() -> Result<SystemInfo, String> {
-    let docker = Docker::connect_with_local_defaults().map_err(|e| e.to_string())?;
+    let docker = get_docker()?;
     let info = docker.info().await.map_err(|e| e.to_string())?;
     let version = docker.version().await.map_err(|e| e.to_string())?;
 
@@ -955,28 +965,64 @@ async fn get_system_info() -> Result<SystemInfo, String> {
 use bollard::system::EventsOptions;
 
 async fn listen_to_docker_events(app_handle: AppHandle) {
-    let docker = match Docker::connect_with_local_defaults() {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-
-    let mut events = docker.events(None::<EventsOptions<String>>);
-
-    while let Some(event) = events.next().await {
-        if let Ok(event) = event {
-            let _ = app_handle.emit("docker-event", event);
+    loop {
+        if IS_STOPPED_INTENTIONALLY.load(Ordering::SeqCst) {
+            let _ = app_handle.emit("docker-connection-status", false);
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            continue;
         }
+
+        match get_docker() {
+            Ok(docker) => {
+                if docker.ping().await.is_err() {
+                    let _ = app_handle.emit("docker-connection-status", false);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    continue;
+                }
+
+                let _ = app_handle.emit("docker-connection-status", true);
+                let mut events = docker.events(None::<EventsOptions<String>>);
+
+                loop {
+                    tokio::select! {
+                        event_res = events.next() => {
+                            match event_res {
+                                Some(Ok(event)) => {
+                                    let _ = app_handle.emit("docker-event", event);
+                                }
+                                _ => break, // Connection lost or stream ended
+                            }
+                        }
+                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(3)) => {
+                            // Periodically ping to ensure connection is still alive
+                            if docker.ping().await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let _ = app_handle.emit("docker-connection-status", false);
+            }
+            Err(_) => {
+                let _ = app_handle.emit("docker-connection-status", false);
+            }
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
 }
 
 async fn emit_container_stats(app_handle: AppHandle) {
-    let docker = match Docker::connect_with_local_defaults() {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+        if IS_STOPPED_INTENTIONALLY.load(Ordering::SeqCst) {
+            continue;
+        }
+
+        let docker = match get_docker() {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
 
         let containers = match docker.list_containers(Some(ListContainersOptions::<String> {
             all: false, // only running
@@ -1044,6 +1090,11 @@ async fn emit_host_stats(app_handle: AppHandle) {
 
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        
+        if IS_STOPPED_INTENTIONALLY.load(Ordering::SeqCst) {
+            continue;
+        }
+
         sys.refresh_all();
         networks.refresh(true);
         
@@ -1085,6 +1136,49 @@ async fn emit_host_stats(app_handle: AppHandle) {
         last_net_rx = current_net_rx;
         last_net_tx = current_net_tx;
     }
+}
+
+// Acaba pelo amor de Deus
+
+#[tauri::command]
+async fn manage_docker_service(action: String) -> Result<String, String> {
+    // Combina comandos para evitar múltiplas solicitações de senha e gerenciar a ativação do socket.
+    let full_cmd = match action.as_str() {
+        "stop" => {
+            IS_STOPPED_INTENTIONALLY.store(true, Ordering::SeqCst);
+            "systemctl stop docker.socket docker.service"
+        },
+        "start" => {
+            IS_STOPPED_INTENTIONALLY.store(false, Ordering::SeqCst);
+            "systemctl start docker.socket docker.service"
+        },
+        "restart" => {
+            IS_STOPPED_INTENTIONALLY.store(false, Ordering::SeqCst);
+            "systemctl restart docker.service"
+        },
+        "reconnect" => {
+            IS_STOPPED_INTENTIONALLY.store(false, Ordering::SeqCst);
+            return Ok("Reconnection logic triggered".into());
+        },
+        _ => return Err("Invalid action".to_string()),
+    };
+
+    let output = std::process::Command::new("pkexec")
+        .arg("sh")
+        .arg("-c")
+        .arg(full_cmd)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        if stderr.is_empty() {
+            return Err(format!("Failed to {} Docker service", action));
+        }
+        return Err(stderr);
+    }
+
+    Ok(format!("Docker service {}ed successfully", action))
 }
 
 fn main() {
@@ -1152,7 +1246,8 @@ fn main() {
             scale_stack_service,
             start_stack,
             stop_stack,
-            restart_stack
+            restart_stack,
+            manage_docker_service
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

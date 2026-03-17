@@ -346,3 +346,11 @@ export const writeStdin = async (containerId: string, data: string): Promise<voi
   if (!isTauri) return console.log("Mock: Writing stdin", containerId, data);
   return await invoke("write_stdin", { containerId, data });
 };
+
+export const manageDockerService = async (action: "start" | "stop" | "restart" | "reconnect"): Promise<string> => {
+  if (!isTauri) {
+    console.log(`Mock: Docker service ${action}`);
+    return `Mock: Docker service ${action}ed`;
+  }
+  return await invoke("manage_docker_service", { action });
+};

@@ -14,7 +14,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { 
+import { useDocker } from "@/context/DockerContext";
+import {
   LayoutDashboard,
   Box, 
   Layers, 
@@ -34,7 +35,10 @@ import {
   Disc,
   Disc2,
   Container,
-  EraserIcon
+  EraserIcon,
+  Play,
+  Square as SquareIcon,
+  RotateCw
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { dockerSystemPrune } from "@/lib/docker";
@@ -63,7 +67,9 @@ const navItems = [
 
 const Sidebar = () => {
   const location = useLocation();
+  const { isConnected } = useDocker();
   const [isPruning, setIsPruning] = useState(false);
+  const [isManagingService, setIsManagingService] = useState(false);
   const [showPruneDialog, setShowPruneDialog] = useState(false);
   const [appVersion, setAppVersion] = useState<string>("");
 
@@ -83,6 +89,17 @@ const Sidebar = () => {
       showError(`Error pruning system: ${err}`);
     } finally {
       setIsPruning(false);
+    }
+  };
+
+  const { manageService } = useDocker();
+
+  const handleServiceAction = async (action: 'start' | 'stop' | 'restart') => {
+    setIsManagingService(true);
+    try {
+      await manageService(action);
+    } finally {
+      setIsManagingService(false);
     }
   };
 
@@ -138,11 +155,59 @@ const Sidebar = () => {
             <span className="text-sm font-medium">System Prune</span>
           </Button>
 
-          <div className="bg-sidebar-accent/50 rounded-lg p-3 flex items-center gap-3">
-            <Circle className="w-3 h-3 text-emerald-500 fill-emerald-500 animate-pulse" />
-            <div className="flex-1 overflow-hidden">
-              <p className="text-xs text-sidebar-foreground font-medium">Daemon Status</p>
-              <p className="text-[10px] text-muted-foreground truncate">Connected: /var/run/docker.sock</p>
+          <div className="bg-sidebar-accent/50 rounded-lg p-3 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <Circle className={cn(
+                "w-3 h-3 animate-pulse",
+                isConnected ? "text-emerald-500 fill-emerald-500" : "text-rose-500 fill-rose-500"
+              )} />
+              <div className="flex-1 overflow-hidden">
+                <p className="text-xs text-sidebar-foreground font-medium">Daemon Status</p>
+                <p className={cn(
+                  "text-[10px] truncate font-semibold transition-colors",
+                  isConnected ? "text-emerald-500" : "text-rose-500"
+                )}>
+                  {isConnected ? "Connected" : "Disconnected"}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-7 w-7 bg-background/50 hover:bg-rose-500/20 hover:text-rose-500"
+                    onClick={() => handleServiceAction('stop')}
+                    disabled={isManagingService}
+                    title="Stop Docker Service"
+                  >
+                    <SquareIcon className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-7 w-7 bg-background/50 hover:bg-amber-500/20 hover:text-amber-500"
+                    onClick={() => handleServiceAction('restart')}
+                    disabled={isManagingService}
+                    title="Restart Docker Service"
+                  >
+                    <RotateCw className={cn("w-3.5 h-3.5", isManagingService && "animate-spin")} />
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 w-full gap-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20"
+                  onClick={() => handleServiceAction('start')}
+                  disabled={isManagingService}
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-bold uppercase">Start Daemon</span>
+                </Button>
+              )}
             </div>
           </div>
         </div>

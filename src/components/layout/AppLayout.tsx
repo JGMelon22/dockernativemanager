@@ -12,13 +12,15 @@
 
 import { useState, useEffect, useRef } from "react";
 import Sidebar from "./Sidebar";
-import { X, Minus, Square } from "lucide-react";
+import { X, Minus, Square, ShieldAlert } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { useDocker } from "@/context/DockerContext";
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { pathname } = useLocation();
+  const { isConnected } = useDocker();
 
   useEffect(() => {
     if (scrollRef.current) {
