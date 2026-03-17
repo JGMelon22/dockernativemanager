@@ -4,7 +4,7 @@
  * Created: 2026-03-13
  * Author: Pedro Farias
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -341,7 +341,10 @@ const Stacks = () => {
       else if (action === 'restart') await restartContainer(containerId);
       
       showSuccess(`Container ${action}ed`);
-      if (selectedStack) openStackDetails(selectedStack);
+      if (selectedStack) {
+        // Wait a bit for Docker to update state before refreshing details
+        setTimeout(() => openStackDetails(selectedStack), 500);
+      }
     } catch (err) {
       showError(`Error ${action}ing container: ${err}`);
     } finally {
@@ -358,7 +361,9 @@ const Stacks = () => {
       
       showSuccess(`Stack ${action}ed successfully`);
       refreshStacks();
-      if (selectedStack && selectedStack.name === name) openStackDetails(selectedStack);
+      if (selectedStack && selectedStack.name === name) {
+        setTimeout(() => openStackDetails(selectedStack), 1000);
+      }
     } catch (err) {
       showError(`Error ${action}ing stack: ${err}`);
     } finally {

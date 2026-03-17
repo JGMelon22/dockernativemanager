@@ -3,7 +3,7 @@
  * Project: docker-native-manager
  * Created: 2026-03-13
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  */
@@ -15,6 +15,7 @@ import Sidebar from "./Sidebar";
 import { X, Minus, Square, ShieldAlert } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useDocker } from "@/context/DockerContext";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -32,7 +33,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     let unlisten: () => void;
     
     const setupListener = async () => {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const win = getCurrentWindow();
       
       const updateMaximized = async () => {
@@ -74,14 +74,12 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           data-tauri-drag-region
           className="h-12 border-b border-border/50 bg-background/50 flex items-center justify-between px-4 select-none shrink-0 cursor-default backdrop-blur-md"
           onDoubleClick={async () => {
-            const { getCurrentWindow } = await import("@tauri-apps/api/window");
             await getCurrentWindow().toggleMaximize();
           }}
           onPointerDown={async (e) => {
             // Only drag on left click and avoid triggering on buttons
             if (e.buttons === 1 && (e.target as HTMLElement).closest('button') === null) {
               try {
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
                 await getCurrentWindow().startDragging();
               } catch (err) {
                 console.error("Failed to start dragging", err);
@@ -98,7 +96,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               onMouseDown={(e) => e.stopPropagation()}
               onClick={async (e) => {
                 e.stopPropagation();
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
                 await getCurrentWindow().minimize();
               }}
               className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground relative z-50"
@@ -109,7 +106,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               onMouseDown={(e) => e.stopPropagation()}
               onClick={async (e) => {
                 e.stopPropagation();
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
                 await getCurrentWindow().toggleMaximize();
               }}
               className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground relative z-50"
@@ -120,7 +116,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               onMouseDown={(e) => e.stopPropagation()}
               onClick={async (e) => {
                 e.stopPropagation();
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
                 await getCurrentWindow().close();
               }}
               className="p-1.5 hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors text-muted-foreground relative z-50"

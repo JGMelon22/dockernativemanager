@@ -4,7 +4,7 @@
  * Created: 2026-03-13
  * Author: Pedro Farias
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -120,7 +120,7 @@ const Volumes = () => {
     try {
       await deleteVolume(name);
       showSuccess(`Volume ${name} deleted`);
-      refreshVolumes();
+      setTimeout(refreshVolumes, 500);
     } catch (err) {
       showError(`Error deleting volume ${name}: ${err}`);
     }
@@ -143,7 +143,7 @@ const Volumes = () => {
       setNewName("");
       setNewDriver("local");
       setNewLabels([]);
-      refreshVolumes();
+      setTimeout(refreshVolumes, 500);
     } catch (err) {
       showError(`Error creating volume: ${err}`);
     } finally {

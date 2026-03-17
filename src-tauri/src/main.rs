@@ -3,7 +3,7 @@
  * Project: docker-native-manager
  * Created: 2026-03-13
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -644,14 +644,22 @@ async fn stop_stack(name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn start_stack(name: String) -> Result<(), String> {
-    let output = std::process::Command::new("docker")
-        .arg("compose")
-        .arg("-p")
-        .arg(&name)
-        .arg("start")
-        .output()
-        .map_err(|e| e.to_string())?;
+async fn start_stack(app: AppHandle, name: String) -> Result<(), String> {
+    use tauri::Manager;
+    let app_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let stacks_dir = app_dir.join("stacks");
+    let compose_file = stacks_dir.join(format!("compose-{}.yaml", name));
+
+    let mut cmd = std::process::Command::new("docker");
+    cmd.arg("compose").arg("-p").arg(&name);
+
+    if compose_file.exists() {
+        cmd.arg("-f").arg(&compose_file).arg("up").arg("-d");
+    } else {
+        cmd.arg("start");
+    }
+
+    let output = cmd.output().map_err(|e| e.to_string())?;
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());

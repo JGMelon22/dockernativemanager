@@ -4,7 +4,7 @@
  * Created: 2026-03-13
  * Author: Pedro Farias
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -113,7 +113,7 @@ const Networks = () => {
     try {
       await deleteNetwork(id);
       showSuccess(`Network ${name} deleted`);
-      refreshNetworks();
+      setTimeout(refreshNetworks, 500);
     } catch (err) {
       showError(`Error deleting network ${name}: ${err}`);
     }
@@ -132,7 +132,7 @@ const Networks = () => {
       setNewDriver("bridge");
       setNewInternal(false);
       setNewAttachable(true);
-      refreshNetworks();
+      setTimeout(refreshNetworks, 500);
     } catch (err) {
       showError(`Error creating network: ${err}`);
     } finally {

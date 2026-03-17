@@ -4,7 +4,7 @@
  * Created: 2026-03-14
  * Author: Pedro Farias
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -27,7 +27,8 @@ import {
   getContainerLogs,
   Container,
   execContainer,
-  writeStdin
+  writeStdin,
+  inspectContainer
 } from "@/lib/docker";
 import {
   Table,
@@ -153,7 +154,8 @@ const Containers = () => {
     try {
       await action(id);
       showSuccess(`Action executed on ${name}`);
-      refreshContainers();
+      // Give Docker a moment to process the state change
+      setTimeout(refreshContainers, 500);
     } catch (err) {
       showError(`Error performing action on ${name}`);
     }
@@ -254,7 +256,7 @@ const Containers = () => {
     setInspectData("Loading inspection data...");
     setLogs("");
     try {
-      const data = await (await import("@/lib/docker")).inspectContainer(container.id);
+      const data = await inspectContainer(container.id);
       setInspectData(data);
     } catch (err) {
       setInspectData("Error loading inspection data.");
@@ -263,7 +265,7 @@ const Containers = () => {
 
   const handleDuplicate = async (container: Container) => {
     try {
-      const data = await (await import("@/lib/docker")).inspectContainer(container.id);
+      const data = await inspectContainer(container.id);
       const config = JSON.parse(data);
       
       setNewName(`${container.name}-copy`);
@@ -380,7 +382,8 @@ const Containers = () => {
     
     showSuccess(`${label} processed for ${successCount}/${count} containers`);
     setSelectedIds([]);
-    refreshContainers();
+    // Give Docker a moment to update internal state before refreshing
+    setTimeout(refreshContainers, 500);
   };
 
   return (
@@ -418,7 +421,7 @@ const Containers = () => {
                 variant="outline"
                 size="sm"
                 className="bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20 rounded-full"
-                onClick={async () => handleBulkAction((await import("@/lib/docker")).startContainer, "Start")}
+                onClick={() => handleBulkAction(startContainer, "Start")}
               >
                 <Play className="w-4 h-4 mr-1.5" />
                 Start
@@ -427,7 +430,7 @@ const Containers = () => {
                 variant="outline"
                 size="sm"
                 className="bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20 rounded-full"
-                onClick={async () => handleBulkAction((await import("@/lib/docker")).stopContainer, "Stop")}
+                onClick={() => handleBulkAction(stopContainer, "Stop")}
               >
                 <Square className="w-4 h-4 mr-1.5" />
                 Stop
@@ -436,7 +439,7 @@ const Containers = () => {
                 variant="outline"
                 size="sm"
                 className="bg-blue-500/10 border-blue-500/20 text-blue-500 hover:bg-blue-500/20 rounded-full"
-                onClick={async () => handleBulkAction((await import("@/lib/docker")).restartContainer, "Restart")}
+                onClick={() => handleBulkAction(restartContainer, "Restart")}
               >
                 <RotateCcw className="w-4 h-4 mr-1.5" />
                 Restart
@@ -459,7 +462,7 @@ const Containers = () => {
                 variant="outline"
                 size="sm"
                 className="bg-rose-500/10 border-rose-500/20 text-rose-500 hover:bg-rose-500/20 rounded-full"
-                onClick={async () => handleBulkAction((await import("@/lib/docker")).deleteContainer, "Delete")}
+                onClick={() => handleBulkAction(deleteContainer, "Delete")}
               >
                 <Trash2 className="w-4 h-4 mr-1.5" />
                 Delete
@@ -962,17 +965,17 @@ const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDup
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-[160px] bg-card border-border">
             {container.status === "running" ? (
-              <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={async () => handleAction((await import("@/lib/docker")).stopContainer, container.id, container.name)}>
+              <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleAction(stopContainer, container.id, container.name)}>
                 <Square className="mr-2 h-4 w-4 text-amber-500" />
                 <span>Stop</span>
               </DropdownMenuItem>
             ) : (
-              <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={async () => handleAction((await import("@/lib/docker")).startContainer, container.id, container.name)}>
+              <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleAction(startContainer, container.id, container.name)}>
                 <Play className="mr-2 h-4 w-4 text-emerald-500" />
                 <span>Start</span>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={async () => handleAction((await import("@/lib/docker")).restartContainer, container.id, container.name)}>
+            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => handleAction(restartContainer, container.id, container.name)}>
               <RefreshCw className="mr-2 h-4 w-4 text-blue-400" />
               <span>Restart</span>
             </DropdownMenuItem>
@@ -994,7 +997,7 @@ const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDup
               <Copy className="mr-2 h-4 w-4 text-blue-400" />
               <span>Duplicate/Edit</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={async () => handleAction((await import("@/lib/docker")).deleteContainer, container.id, container.name)} className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer">
+            <DropdownMenuItem onClick={() => handleAction(deleteContainer, container.id, container.name)} className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer">
               <Trash2 className="mr-2 h-4 w-4" />
               <span>Delete</span>
             </DropdownMenuItem>

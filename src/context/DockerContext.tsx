@@ -4,7 +4,7 @@
  * Created: 2026-03-14
  * Author: Pedro Farias
  * 
- * Last Modified: Mon Mar 16 2026
+ * Last Modified: Tue Mar 17 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -290,11 +290,21 @@ export const DockerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Optimization: Don't refresh EVERYTHING for every event immediately.
     // Maybe only refresh relevant parts based on event.Type
     const type = event?.Type?.toLowerCase();
-    if (type === 'container') refreshContainers();
-    else if (type === 'image') refreshImages();
-    else if (type === 'volume') refreshVolumes();
-    else if (type === 'network') refreshNetworks();
-    else refreshAll();
+    
+    if (type === 'container') {
+      refreshContainers();
+      refreshSystemInfo();
+    } else if (type === 'image') {
+      refreshImages();
+      refreshSystemInfo();
+    } else if (type === 'volume') {
+      refreshVolumes();
+      refreshSystemInfo();
+    } else if (type === 'network') {
+      refreshNetworks();
+    } else {
+      refreshAll();
+    }
 
     if (event) {
       setEvents((prev) => {
@@ -310,7 +320,7 @@ export const DockerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return newEvents.slice(0, 20); // keep last 20
       });
     }
-  }, [refreshAll]));
+  }, [refreshContainers, refreshImages, refreshVolumes, refreshNetworks, refreshSystemInfo, refreshAll]));
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
