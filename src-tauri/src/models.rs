@@ -3,7 +3,7 @@
  * Project: docker-native-manager
  * Created: 2026-03-17
  * 
- * Last Modified: Tue Mar 17 2026
+ * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
  * 
  */
@@ -33,6 +33,8 @@ pub struct ContainerInfo {
     pub created: i64,
     pub ip_address: String,
     pub labels: HashMap<String, String>,
+    pub stack: String,
+    pub host: String,
 }
 
 #[derive(Serialize)]
@@ -71,6 +73,7 @@ pub struct StackInfo {
     pub services: usize,
     pub created: i64,
     pub updated: i64,
+    pub stack_type: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -78,6 +81,10 @@ pub struct ContainerStats {
     pub cpu_percent: f64,
     pub memory_usage: u64,
     pub memory_limit: u64,
+    pub disk_read: u64,
+    pub disk_write: u64,
+    pub net_rx: u64,
+    pub net_tx: u64,
 }
 
 #[derive(Serialize)]

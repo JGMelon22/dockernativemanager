@@ -3,7 +3,7 @@
  * Project: docker-native-manager
  * Created: 2026-03-17
  * 
- * Last Modified: Tue Mar 17 2026
+ * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
  * 
  */
@@ -25,13 +25,26 @@ pub async fn get_stacks() -> Result<Vec<StackInfo>, String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    let mut stacks: HashMap<String, (usize, bool, i64, i64)> = HashMap::new();
+    let mut stacks: HashMap<String, (usize, bool, i64, i64, String)> = HashMap::new();
 
     for c in containers {
         if let Some(labels) = c.labels {
             if let Some(stack_name) = labels.get("com.docker.compose.project") {
                 let created = c.created.unwrap_or(0);
-                let entry = stacks.entry(stack_name.clone()).or_insert((0, true, created, created));
+                let entry = stacks.entry(stack_name.clone()).or_insert((0, true, created, created, "Compose".to_string()));
+                entry.0 += 1;
+                if c.state.as_deref() != Some("running") {
+                    entry.1 = false;
+                }
+                if created < entry.2 && created != 0 {
+                    entry.2 = created;
+                }
+                if created > entry.3 {
+                    entry.3 = created;
+                }
+            } else if let Some(stack_name) = labels.get("com.docker.stack.namespace") {
+                let created = c.created.unwrap_or(0);
+                let entry = stacks.entry(stack_name.clone()).or_insert((0, true, created, created, "Swarm".to_string()));
                 entry.0 += 1;
                 if c.state.as_deref() != Some("running") {
                     entry.1 = false;
@@ -48,12 +61,13 @@ pub async fn get_stacks() -> Result<Vec<StackInfo>, String> {
 
     Ok(stacks
         .into_iter()
-        .map(|(name, (services, all_running, created, updated))| StackInfo {
+        .map(|(name, (services, all_running, created, updated, stack_type))| StackInfo {
             name,
             services,
             status: if all_running { "running".into() } else { "degraded".into() },
             created,
             updated,
+            stack_type,
         })
         .collect())
 }

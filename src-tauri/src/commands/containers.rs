@@ -3,7 +3,7 @@
  * Project: docker-native-manager
  * Created: 2026-03-17
  * 
- * Last Modified: Tue Mar 17 2026
+ * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
  * 
  */
@@ -39,6 +39,12 @@ pub async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
                 .and_then(|net| net.ip_address)
                 .unwrap_or_else(|| "".to_string());
 
+            let labels = c.labels.unwrap_or_default();
+            let stack = labels.get("com.docker.compose.project")
+                .or_else(|| labels.get("com.docker.stack.namespace"))
+                .cloned()
+                .unwrap_or_else(|| "-".to_string());
+
             ContainerInfo {
                 id: c.id.unwrap_or_default(),
                 name: c.names.unwrap_or_default().first().map(|s| s.trim_start_matches('/').to_string()).unwrap_or_else(|| "unnamed".to_string()),
@@ -60,7 +66,9 @@ pub async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
                 }).collect::<Vec<_>>().join(", "),
                 created: c.created.unwrap_or(0),
                 ip_address,
-                labels: c.labels.unwrap_or_default(),
+                labels,
+                stack,
+                host: "localhost".to_string(), // In a non-swarm context, it's the local host
             }
         })
         .collect())
@@ -228,10 +236,35 @@ pub async fn get_container_stats(id: String) -> Result<ContainerStats, String> {
             }
         }
 
+        let mut net_rx = 0;
+        let mut net_tx = 0;
+        if let Some(networks) = stats.networks {
+            for net in networks.values() {
+                net_rx += net.rx_bytes;
+                net_tx += net.tx_bytes;
+            }
+        }
+
+        let mut disk_read = 0;
+        let mut disk_write = 0;
+        if let Some(ios) = stats.blkio_stats.io_service_bytes_recursive {
+            for io in ios {
+                match io.op.to_lowercase().as_str() {
+                    "read" => disk_read += io.value,
+                    "write" => disk_write += io.value,
+                    _ => {}
+                }
+            }
+        }
+
         return Ok(ContainerStats {
             cpu_percent,
             memory_usage: actual_memory,
             memory_limit,
+            disk_read,
+            disk_write,
+            net_rx,
+            net_tx,
         });
     }
 

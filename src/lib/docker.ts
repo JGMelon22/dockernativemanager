@@ -3,7 +3,7 @@
  * Project: docker-native-manager
  * Created: 2026-03-13
  * 
- * Last Modified: Tue Mar 17 2026
+ * Last Modified: 2026-03-19 03:30:34
  * Modified By: Pedro Farias
  * 
  */
@@ -25,12 +25,18 @@ export interface Container {
   created: number;
   ip_address: string;
   labels: Record<string, string>;
+  stack: string;
+  host: string;
 }
 
 export interface ContainerStats {
   cpu_percent: number;
   memory_usage: number;
   memory_limit: number;
+  disk_read: number;
+  disk_write: number;
+  net_rx: number;
+  net_tx: number;
 }
 
 export interface Image {
@@ -65,14 +71,15 @@ export interface Stack {
   services: number;
   created: number;
   updated: number;
+  stack_type: string;
   isDeploying?: boolean;
 }
 
 // MOCK DATA for Web Preview
 const MOCK_CONTAINERS: Container[] = [
-  { id: "c1", name: "nginx-proxy", image: "nginx:latest", status: "running", state: "Up 2 hours", ports: "80:80, 443:443", created: 1710550000, ip_address: "172.17.0.2", labels: {} },
-  { id: "c2", name: "postgres-db", image: "postgres:15-alpine", status: "running", state: "Up 5 hours", ports: "5432:5432", created: 1710540000, ip_address: "172.17.0.3", labels: {} },
-  { id: "c3", name: "redis-cache", image: "redis:7", status: "exited", state: "Exited (0) 10 mins ago", ports: "6379", created: 1710530000, ip_address: "172.17.0.4", labels: {} },
+  { id: "c1", name: "nginx-proxy", image: "nginx:latest", status: "running", state: "Up 2 hours", ports: "80:80, 443:443", created: 1710550000, ip_address: "172.17.0.2", labels: {}, stack: "proxy", host: "localhost" },
+  { id: "c2", name: "postgres-db", image: "postgres:15-alpine", status: "running", state: "Up 5 hours", ports: "5432:5432", created: 1710540000, ip_address: "172.17.0.3", labels: {}, stack: "database", host: "localhost" },
+  { id: "c3", name: "redis-cache", image: "redis:7", status: "exited", state: "Exited (0) 10 mins ago", ports: "6379", created: 1710530000, ip_address: "172.17.0.4", labels: {}, stack: "cache", host: "localhost" },
 ];
 
 const MOCK_IMAGES: Image[] = [
@@ -220,12 +227,12 @@ export const getContainerLogs = async (
 };
 
 export const getContainerStats = async (id: string): Promise<ContainerStats> => {
-  if (!isTauri) return { cpu_percent: 0, memory_usage: 0, memory_limit: 0 };
+  if (!isTauri) return { cpu_percent: 0, memory_usage: 0, memory_limit: 0, disk_read: 0, disk_write: 0, net_rx: 0, net_tx: 0 };
   return await invoke("get_container_stats", { id });
 };
 
 export const getStacks = async (): Promise<Stack[]> => {
-  if (!isTauri) return [{ name: "my-app", status: "running", services: 3, created: 1710550000, updated: 1710555000 }];
+  if (!isTauri) return [{ name: "my-app", status: "running", services: 3, created: 1710550000, updated: 1710555000, stack_type: "Compose" }];
   return await invoke("get_stacks");
 };
 

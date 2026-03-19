@@ -4,7 +4,7 @@
  * Created: 2026-03-14
  * Author: Pedro Farias
  * 
- * Last Modified: Tue Mar 17 2026
+ * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -26,6 +26,7 @@ import {
   createContainer,
   getContainerLogs,
   Container,
+  ContainerStats,
   execContainer,
   writeStdin,
   inspectContainer
@@ -69,6 +70,11 @@ import {
   Download,
   Clipboard,
   Plus,
+  Activity,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Network as NetworkIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -98,6 +104,15 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ResponsiveContainer, LineChart, Line } from "recharts";
+import { memo } from "react";
+
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -117,8 +132,10 @@ const Containers = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedContainer, setSelectedContainer] = useState<Container | null>(null);
   const [logs, setLogs] = useState("");
-  const [panelMode, setPanelMode] = useState<"terminal" | "logs" | "inspect" | null>(null);
+  const [panelMode, setPanelMode] = useState<"terminal" | "logs" | "inspect" | "status" | null>(null);
   const [inspectData, setInspectData] = useState("");
+  const [containerStats, setContainerStats] = useState<ContainerStats | null>(null);
+  const [containerStatsHistory, setContainerStatsHistory] = useState<ContainerStats[]>([]);
 
   // Log specific states
   const [autoRefreshLogs, setAutoRefreshLogs] = useState(true);
@@ -262,6 +279,40 @@ const Containers = () => {
       setInspectData("Error loading inspection data.");
     }
   };
+
+  const openStatus = (container: Container) => {
+    setSelectedContainer(container);
+    setPanelMode("status");
+    setLogs("");
+    setInspectData("");
+    setContainerStats(null);
+    setContainerStatsHistory([]);
+  };
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (selectedContainer && panelMode === "status") {
+      const fetchStats = async () => {
+        try {
+          const { getContainerStats } = await import("@/lib/docker");
+          const stats = await getContainerStats(selectedContainer.id);
+          setContainerStats(stats);
+          setContainerStatsHistory(prev => {
+            const newHistory = [...prev, stats];
+            if (newHistory.length > 30) return newHistory.slice(1);
+            return newHistory;
+          });
+        } catch (e) {
+          console.error("Failed to fetch container stats", e);
+        }
+      };
+      fetchStats();
+      interval = setInterval(fetchStats, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [selectedContainer, panelMode]);
 
   const handleDuplicate = async (container: Container) => {
     try {
@@ -521,17 +572,6 @@ const Containers = () => {
               </TableHead>
               <TableHead 
                 className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => requestSort('status')}
-              >
-                <div className="flex items-center gap-1">
-                  Status
-                  {sortConfig?.key === 'status' && (
-                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => requestSort('name')}
               >
                 <div className="flex items-center gap-1">
@@ -543,22 +583,23 @@ const Containers = () => {
               </TableHead>
               <TableHead
                 className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => requestSort('status')}
+              >
+                <div className="flex items-center gap-1">
+                  State
+                  {sortConfig?.key === 'status' && (
+                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead className="text-muted-foreground font-medium">Stack</TableHead>
+              <TableHead
+                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => requestSort('image')}
               >
                 <div className="flex items-center gap-1">
                   Image
                   {sortConfig?.key === 'image' && (
-                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead
-                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => requestSort('ip_address')}
-              >
-                <div className="flex items-center gap-1">
-                  IP Address
-                  {sortConfig?.key === 'ip_address' && (
                     sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
                   )}
                 </div>
@@ -574,7 +615,19 @@ const Containers = () => {
                   )}
                 </div>
               </TableHead>
-              <TableHead className="text-muted-foreground font-medium">Stats</TableHead>
+              <TableHead
+                className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
+                onClick={() => requestSort('ip_address')}
+              >
+                <div className="flex items-center gap-1">
+                  IP Address
+                  {sortConfig?.key === 'ip_address' && (
+                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead className="text-muted-foreground font-medium">Host</TableHead>
+              <TableHead className="text-muted-foreground font-medium">Published Ports</TableHead>
               <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -584,11 +637,13 @@ const Containers = () => {
                 <TableRow key={i} className="border-border">
                   <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-8 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                 </TableRow>
               ))
@@ -604,11 +659,12 @@ const Containers = () => {
                   openLogs={openLogs}
                   openTerminal={openTerminal}
                   openInspect={openInspect}
+                  openStatus={openStatus}
                 />
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
                   No containers found.
                 </TableCell>
               </TableRow>
@@ -626,11 +682,11 @@ const Containers = () => {
         <SheetContent side="right" className="w-[80%] sm:w-[80%] sm:max-w-none bg-background border-border text-foreground flex flex-col p-0 gap-0">
           <SheetHeader className="p-5 border-b border-border shrink-0">
             <SheetTitle className="text-foreground flex items-center gap-2">
-              {panelMode === "terminal" ? <CommandLine className="w-5 h-5 text-amber-500" /> : panelMode === "logs" ? <Terminal className="w-5 h-5 text-blue-500" /> : <Eye className="w-5 h-5 text-emerald-500" />}
-              {panelMode === "terminal" ? "Terminal" : panelMode === "logs" ? "Logs" : "Inspect"}: {selectedContainer?.name}
+              {panelMode === "terminal" ? <CommandLine className="w-5 h-5 text-amber-500" /> : panelMode === "logs" ? <Terminal className="w-5 h-5 text-blue-500" /> : panelMode === "status" ? <Activity className="w-5 h-5 text-purple-500" /> : <Eye className="w-5 h-5 text-emerald-500" />}
+              {panelMode === "terminal" ? "Terminal" : panelMode === "logs" ? "Logs" : panelMode === "status" ? "Resource Status" : "Inspect"}: {selectedContainer?.name}
             </SheetTitle>
             <SheetDescription className="text-muted-foreground">
-              {panelMode === "terminal" ? `Interactive shell for ${selectedContainer?.image}` : panelMode === "logs" ? `Live container output from ${selectedContainer?.image}` : `Configuration details for ${selectedContainer?.id}`}
+              {panelMode === "terminal" ? `Interactive shell for ${selectedContainer?.image}` : panelMode === "logs" ? `Live container output from ${selectedContainer?.image}` : panelMode === "status" ? `Live resource usage for ${selectedContainer?.image}` : `Configuration details for ${selectedContainer?.id}`}
             </SheetDescription>
           </SheetHeader>
           
@@ -796,6 +852,61 @@ const Containers = () => {
               <div className="bg-card rounded-lg p-4 font-mono text-xs overflow-auto whitespace-pre-wrap border border-border h-full">
                 {inspectData}
               </div>
+            ) : panelMode === "status" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full content-start overflow-auto pb-6">
+                <StatCard
+                  title="CPU Usage"
+                  value={containerStats ? `${containerStats.cpu_percent.toFixed(1)}%` : "0%"}
+                  subtext={containerStats ? "Current usage" : "Monitoring suspended"}
+                  icon={<Cpu className="w-5 h-5 text-orange-500" />}
+                  loading={!containerStats}
+                  chartData={containerStatsHistory.map(h => ({ val: h.cpu_percent }))}
+                  series={[{ key: 'val', color: '#f97316' }]}
+                />
+                <StatCard
+                  title="Memory"
+                  value={containerStats ? formatBytes(containerStats.memory_usage) : "0 B"}
+                  subtext={containerStats ? `of ${formatBytes(containerStats.memory_limit)}` : "Monitoring suspended"}
+                  icon={<MemoryStick className="w-5 h-5 text-cyan-500" />}
+                  loading={!containerStats}
+                  chartData={containerStatsHistory.map(h => ({ val: h.memory_usage }))}
+                  series={[{ key: 'val', color: '#06b6d4' }]}
+                />
+                <StatCard
+                  title="Disk I/O"
+                  value={containerStats ? `${formatBytes(containerStats.disk_read + containerStats.disk_write)}/s` : "0 B/s"}
+                  subtext={
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400">R: {containerStats ? formatBytes(containerStats.disk_read) : "0 B"}/s</span>
+                      <span className="text-rose-400">W: {containerStats ? formatBytes(containerStats.disk_write) : "0 B"}/s</span>
+                    </div>
+                  }
+                  icon={<HardDrive className="w-5 h-5 text-pink-500" />}
+                  loading={!containerStats}
+                  chartData={containerStatsHistory.map(h => ({ read: h.disk_read, write: h.disk_write }))}
+                  series={[
+                    { key: 'read', color: '#10b981' },
+                    { key: 'write', color: '#f43f5e' }
+                  ]}
+                />
+                <StatCard
+                  title="Network"
+                  value={containerStats ? `${formatBytes(containerStats.net_rx + containerStats.net_tx)}/s` : "0 B/s"}
+                  subtext={
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-400">↓ {containerStats ? formatBytes(containerStats.net_rx) : "0 B"}/s</span>
+                      <span className="text-purple-400">↑ {containerStats ? formatBytes(containerStats.net_tx) : "0 B"}/s</span>
+                    </div>
+                  }
+                  icon={<NetworkIcon className="w-5 h-5 text-indigo-500" />}
+                  loading={!containerStats}
+                  chartData={containerStatsHistory.map(h => ({ down: h.net_rx, up: h.net_tx }))}
+                  series={[
+                    { key: 'down', color: '#3b82f6' },
+                    { key: 'up', color: '#a855f7' }
+                  ]}
+                />
+              </div>
             ) : null}
           </div>
         </SheetContent>
@@ -887,9 +998,10 @@ interface ContainerRowProps {
   openLogs: (container: Container) => void;
   openTerminal: (container: Container) => void;
   openInspect: (container: Container) => Promise<void>;
+  openStatus: (container: Container) => void;
 }
 
-const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDuplicate, openLogs, openTerminal, openInspect }: ContainerRowProps) => {
+const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDuplicate, openLogs, openTerminal, openInspect, openStatus }: ContainerRowProps) => {
   const [stats, setStats] = useState<{
     cpu_percent: number;
     memory_usage: number;
@@ -928,33 +1040,33 @@ const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDup
           className="border-border data-[state=checked]:bg-blue-600"
         />
       </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Badge className={cn(
-            "capitalize px-2 py-0.5 text-[10px] font-semibold",
-            container.status === "running" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-muted-500/10 text-muted-foreground border-muted-500/20"
-          )}>
-            {container.status}
-          </Badge>
-          <span className="text-xs text-muted-foreground font-mono">{container.state}</span>
+      <TableCell className="font-semibold text-foreground">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            {container.name}
+          </div>
         </div>
       </TableCell>
-      <TableCell className="font-semibold text-foreground">{container.name}</TableCell>
+      <TableCell>
+        <Badge className={cn(
+          "px-2 py-0.5 text-[10px] font-mono uppercase border font-semibold",
+          container.status === "running"
+            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+            : container.status === "paused"
+            ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+            : "bg-rose-500/10 text-rose-500 border-rose-500/20"
+        )}>
+          {container.status}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-xs font-mono">{container.stack}</TableCell>
       <TableCell className="text-muted-foreground text-xs font-mono">{container.image}</TableCell>
-      <TableCell className="text-muted-foreground text-xs font-mono">{container.ip_address || "-"}</TableCell>
       <TableCell className="text-muted-foreground text-xs">
         {container.created ? new Date(container.created * 1000).toLocaleString() : "-"}
       </TableCell>
-      <TableCell className="text-muted-foreground text-xs font-mono">
-        {stats ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-emerald-400">{stats.cpu_percent.toFixed(2)}% CPU</span>
-            <span className="text-blue-400">{formatBytes(stats.memory_usage)} / {formatBytes(stats.memory_limit)} RAM</span>
-          </div>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        )}
-      </TableCell>
+      <TableCell className="text-muted-foreground text-xs font-mono">{container.ip_address || "-"}</TableCell>
+      <TableCell className="text-muted-foreground text-xs font-mono">{container.host}</TableCell>
+      <TableCell className="text-muted-foreground text-xs font-mono">{container.ports || "-"}</TableCell>
       <TableCell className="text-right">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -980,6 +1092,10 @@ const ContainerRow = ({ container, isSelected, onSelect, handleAction, handleDup
               <span>Restart</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => openStatus(container)} disabled={container.status !== "running"}>
+              <Activity className="mr-2 h-4 w-4 text-purple-500" />
+              <span>Status</span>
+            </DropdownMenuItem>
             <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => openLogs(container)}>
               <Terminal className="mr-2 h-4 w-4 text-blue-500" />
               <span>Logs</span>
@@ -1101,5 +1217,62 @@ const TerminalComponent = ({
     </div>
   );
 };
+
+interface StatCardProps {
+  title: string;
+  value: string | number | undefined;
+  subtext: string | React.ReactNode;
+  icon: React.ReactNode;
+  loading: boolean;
+  chartData?: any[];
+  series?: { key: string; color: string }[];
+}
+
+const StatCard = memo(({ title, value, subtext, icon, loading, chartData, series }: StatCardProps) => (
+  <Card className="bg-card border-border overflow-hidden relative group transition-colors hover:border-border/80">
+    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 relative z-10 bg-transparent">
+      <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">
+        {title}
+      </CardTitle>
+      <div className="opacity-40 group-hover:opacity-100 transition-opacity duration-300">
+        {icon}
+      </div>
+    </CardHeader>
+    <CardContent className="relative z-10 bg-transparent">
+      {loading ? (
+        <Skeleton className="h-8 w-24 mb-1" />
+      ) : (
+        <div className="text-2xl font-black text-foreground tracking-tight">
+          {value !== undefined ? value : "0"}
+        </div>
+      )}
+      <div className="text-[11px] text-muted-foreground mt-1 font-medium">
+        {loading ? <Skeleton className="h-3 w-32" /> : subtext}
+      </div>
+    </CardContent>
+    
+    {!loading && chartData && chartData.length > 1 && series && (
+      <div className="absolute bottom-0 left-0 right-0 h-12 opacity-10 group-hover:opacity-25 transition-opacity duration-500 pointer-events-none">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            {series.map((s) => (
+              <Line
+                key={s.key}
+                type="monotone"
+                dataKey={s.key}
+                stroke={s.color}
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    )}
+  </Card>
+));
+
+StatCard.displayName = "StatCard";
 
 export default Containers;

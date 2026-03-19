@@ -4,7 +4,7 @@
  * Created: 2026-03-13
  * Author: Pedro Farias
  * 
- * Last Modified: Tue Mar 17 2026
+ * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
  * 
  * Copyright (c) 2026 Pedro Farias
@@ -312,6 +312,7 @@ const Stacks = () => {
       services: 0, // Unknown until deployed
       created: Date.now() / 1000,
       updated: Date.now() / 1000,
+      stack_type: "Compose",
       isDeploying: true,
     };
   }).filter(s => 
@@ -668,6 +669,7 @@ const Stacks = () => {
                     )}
                   </div>
                 </TableHead>
+                <TableHead className="text-muted-foreground font-medium">Type</TableHead>
                 <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
                   onClick={() => requestSort('services')}
@@ -709,6 +711,7 @@ const Stacks = () => {
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i} className="border-border">
                     <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
@@ -755,6 +758,11 @@ const Stacks = () => {
                           : "bg-amber-500/10 text-amber-500 border-amber-500/20"
                       )}>
                         {s.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[10px] font-mono uppercase">
+                        {s.stack_type}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
