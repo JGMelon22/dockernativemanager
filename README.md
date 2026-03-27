@@ -7,18 +7,22 @@
 
 A modern, native, and blazing-fast desktop application to manage your Docker environments, built with **Tauri v2**, **React**, **TypeScript**, and **Rust**.
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/1b10e3eb-415b-47d0-8974-6bf47bac9585" />
+![alt text](<dockernm.png>)
 
 ## ✨ Features
 
-- **Containers Management**: Start, stop, restart, create, and delete containers.
-- **Real-Time Stats**: Monitor CPU and Memory usage live for running containers.
-- **Live Logs Viewer**: View and debug container output streams with ease.
-- **Images**: Pull new images directly from Docker Hub, list local images, and delete them.
-- **Volumes & Networks**: Full CRUD operations to keep your local environment clean.
-- **Docker Compose / Stacks**: Deploy `.yaml` stacks and manage multi-container services in one place.
-- **Native UI/UX**: Custom frameless window, transparent backgrounds, and dark mode built on top of Shadcn UI and Tailwind CSS.
-- **Fast & Lightweight**: Interacts directly with the Docker Daemon via Rust (`bollard` crate), skipping heavy intermediate servers or electron bloat.
+- **Dynamic Dashboard**: Real-time overview of your Docker system, including container counts, image storage, and host resource availability (CPU/RAM).
+- **Containers Management**: Full control with start, stop, restart, delete, and advanced creation (Ports, Envs, Volumes).
+- **Interactive Terminal**: Access container shells directly with a built-in terminal (powered by xterm.js).
+- **Bulk Actions**: Select multiple containers or images to perform operations like start, stop, or delete in one go.
+- **Real-Time Event Driven**: UI updates instantly using Tauri Events, eliminating unnecessary polling and reducing resource usage.
+- **Advanced Filtering**: Quickly find resources with instant search and status-based filters (Running, Exited, etc.).
+- **Resource Inspection**: Deep-dive into any resource (Containers, Images, Volumes, Networks) with a built-in JSON inspector.
+- **Live Logs & Stats**: Monitor CPU/Memory usage and view log streams directly from the native backend.
+- **Theme Support**: Seamlessly switch between Dark and Light modes.
+- **Volumes & Networks**: Full management of data storage and virtual networks.
+- **Docker Compose / Stacks**: Deploy and manage multi-container projects with ease.
+- **System Maintenance**: One-click `Docker System Prune` to reclaim disk space instantly.
 
 ## 🚀 Getting Started
 
@@ -29,7 +33,26 @@ A modern, native, and blazing-fast desktop application to manage your Docker env
 - Rust (latest stable version)
 - Docker Desktop or Docker Engine running locally
 
-### Installation
+### Distributions using DPKG (Debian, Ubuntu, Mint, etc.)
+```bash
+sudo apt install ./docker-native-manager-x.y.z-x86_64.deb
+```
+### Distributions using RPM (Fedora/openSUSE, etc.)
+```bash
+sudo dnf install ./docker-native-manager-x.y.z-x86_64.rpm
+sudo zypper install ./docker-native-manager-x.y.z-x86_64.rpm
+```
+### Distributions using ALPM (Arch Linux, CachyOS, SteamOS, etc.)
+```bash
+sudo pacman -U ./docker-native-manager-x.y.z-x86_64.pkg.tar.zst 
+```
+
+### Portable installation (AppImage)
+```bash
+chmod +x docker-native-manager-x.y.z-x86_64.AppImage && ./docker-native-manager-x.y.z-x86_64.AppImage
+```
+
+### Manual Installation
 
 1. Clone the repository:
    ```bash
@@ -78,3 +101,7 @@ Feel free to check [issues page](https://github.com/pedrofariasx/dockernativeman
 ## 📝 License
 
 This project is [MIT](https://opensource.org/licenses/MIT) licensed.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=pedrofariasx/dockernativemanager&type=Date)](https://www.star-history.com/#pedrofariasx/dockernativemanager&Date)
