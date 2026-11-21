@@ -3,12 +3,10 @@
  * Project: docker-native-manager
  * Created: 2026-03-19
  * Author: Pedro Farias
- * 
+ *
  * Copyright (c) 2026 Pedro Farias
  * License: MIT
  */
-
-"use client";
 
 import { useEffect, useState } from "react";
 import {
@@ -21,47 +19,18 @@ import {
   leaveSwarm,
   SwarmInfo,
   NodeInfo,
-  ServiceInfo
+  ServiceInfo,
 } from "@/lib/docker";
 import { useDocker } from "@/context/DockerContext";
 import { cn } from "@/lib/utils";
-import {
-  Table,
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import {
-  Network,
-  Server,
-  Activity,
-  Shield,
-  Search,
-  RefreshCw,
-  Eye,
-  Info,
-  Layers,
-  Cpu,
-  Database,
-  Loader2,
-  LogOut,
-  Component,
-  ComponentIcon,
-  Waypoints,
-} from "lucide-react";
+import { Server, Activity, Shield, Search, RefreshCw, Eye, Layers, Loader2, LogOut, Waypoints } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { showSuccess, showError } from "@/utils/toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,6 +76,7 @@ const Swarm = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
 
   const handleInspectService = async (id: string, name: string) => {
@@ -157,15 +127,15 @@ const Swarm = () => {
     }
   };
 
-  const filteredNodes = nodes.filter(n => 
-    n.hostname.toLowerCase().includes(search.toLowerCase()) || 
-    n.id.toLowerCase().includes(search.toLowerCase())
+  const filteredNodes = nodes.filter(
+    (n) => n.hostname.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const filteredServices = services.filter(s => 
-    s.name.toLowerCase().includes(search.toLowerCase()) || 
-    s.id.toLowerCase().includes(search.toLowerCase()) ||
-    s.stack.toLowerCase().includes(search.toLowerCase())
+  const filteredServices = services.filter(
+    (s) =>
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.id.toLowerCase().includes(search.toLowerCase()) ||
+      s.stack.toLowerCase().includes(search.toLowerCase()),
   );
 
   if (!isConnected) {
@@ -239,8 +209,8 @@ const Swarm = () => {
           </div>
           <h2 className="text-3xl font-bold tracking-tight text-foreground">Swarm Mode is Inactive</h2>
           <p className="text-muted-foreground text-lg">
-            This Docker engine is not part of a Swarm cluster.
-            Initialize a swarm cluster to orchestrate services across multiple nodes.
+            This Docker engine is not part of a Swarm cluster. Initialize a swarm cluster to orchestrate services across
+            multiple nodes.
           </p>
         </div>
 
@@ -257,8 +227,8 @@ const Swarm = () => {
                 className="bg-muted/30 border-muted-foreground/20 h-11 focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <p className="text-xs text-muted-foreground italic">
-                The address that other nodes in the swarm can use to reach this node.
-                Required if your system has multiple network interfaces.
+                The address that other nodes in the swarm can use to reach this node. Required if your system has
+                multiple network interfaces.
               </p>
             </div>
           </div>
@@ -285,7 +255,9 @@ const Swarm = () => {
         </div>
 
         <div className="flex flex-col items-center gap-2">
-          <p className="text-sm text-muted-foreground uppercase tracking-widest font-medium">Or join an existing cluster</p>
+          <p className="text-sm text-muted-foreground uppercase tracking-widest font-medium">
+            Or join an existing cluster
+          </p>
           <div className="bg-muted px-4 py-2 rounded-md font-mono text-sm border border-border">
             docker swarm join --token {"<token>"} {"<manager-ip>"}:2377
           </div>
@@ -400,12 +372,24 @@ const Swarm = () => {
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[120px]" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[150px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[200px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[60px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[100px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[120px]" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-8 w-8 ml-auto" />
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : filteredServices.length === 0 ? (
@@ -435,8 +419,8 @@ const Swarm = () => {
                       </TableCell>
                       <TableCell className="text-xs font-mono">{service.ports || "-"}</TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="icon"
                           onClick={() => handleInspectService(service.id, service.name)}
                         >
@@ -469,13 +453,27 @@ const Swarm = () => {
                 {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[120px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[150px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[80px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[80px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[100px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[120px]" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-[60px]" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-8 w-8 ml-auto" />
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : filteredNodes.length === 0 ? (
@@ -494,19 +492,18 @@ const Swarm = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge 
-                          variant={node.role === 'manager' ? "default" : "secondary"}
-                          className="capitalize"
-                        >
+                        <Badge variant={node.role === "manager" ? "default" : "secondary"} className="capitalize">
                           {node.role}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className={cn(
-                            "w-2 h-2 rounded-full",
-                            node.status.toLowerCase().includes('ready') ? "bg-emerald-500" : "bg-rose-500"
-                          )} />
+                          <div
+                            className={cn(
+                              "w-2 h-2 rounded-full",
+                              node.status.toLowerCase().includes("ready") ? "bg-emerald-500" : "bg-rose-500",
+                            )}
+                          />
                           <span className="capitalize">{node.status}</span>
                         </div>
                       </TableCell>
@@ -514,11 +511,7 @@ const Swarm = () => {
                       <TableCell className="font-mono text-xs">{node.ip_address}</TableCell>
                       <TableCell className="text-xs">{node.engine_version}</TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleInspectNode(node.id, node.hostname)}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => handleInspectNode(node.id, node.hostname)}>
                           <Eye className="w-4 h-4" />
                         </Button>
                       </TableCell>
@@ -536,9 +529,8 @@ const Swarm = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action will cause this node to leave the Swarm cluster.
-              Any services running on this node will be terminated or migrated.
-              This action cannot be undone.
+              This action will cause this node to leave the Swarm cluster. Any services running on this node will be
+              terminated or migrated. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -562,9 +554,7 @@ const Swarm = () => {
             <DialogTitle>{inspectTitle}</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-muted/50 rounded-md p-4 mt-2">
-            <pre className="text-xs font-mono whitespace-pre-wrap">
-              {inspectData}
-            </pre>
+            <pre className="text-xs font-mono whitespace-pre-wrap">{inspectData}</pre>
           </div>
         </DialogContent>
       </Dialog>

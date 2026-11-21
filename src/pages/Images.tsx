@@ -3,32 +3,22 @@
  * Project: docker-native-manager
  * Created: 2026-03-13
  * Author: Pedro Farias
- * 
+ *
  * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
- * 
+ *
  * Copyright (c) 2026 Pedro Farias
  * License: MIT
  */
 
-"use client";
-
 import { useDocker } from "@/context/DockerContext";
-import { useEffect, useState, useCallback } from "react";
-import { useDockerEvent } from "@/hooks/use-docker-events";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 import { deleteImage, Image, inspectImage, createContainer, pruneImages } from "@/lib/docker";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -52,10 +42,9 @@ import {
   ChevronDown,
   Copy,
   Eraser,
-  X
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -64,29 +53,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 
-
-
 const Images = () => {
-  const {
-    images,
-    containers,
-    loading,
-    refreshImages,
-    pullingImages,
-    pullImageBackground,
-  } = useDocker();
+  const { images, containers, loading, refreshImages, pullingImages, pullImageBackground } = useDocker();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -102,14 +76,9 @@ const Images = () => {
   const [containerPorts, setContainerPorts] = useState("");
   const [containerEnvs, setContainerEnvs] = useState("");
   const [containerVolumes, setContainerVolumes] = useState("");
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [filterInUse, setFilterInUse] = useState(false);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refreshImages();
-    setIsRefreshing(false);
-  };
+  const [pullingCreatedAt] = useState(() => new Date().toISOString());
 
   const handleDelete = async (id: string, repo: string) => {
     try {
@@ -142,55 +111,61 @@ const Images = () => {
     }
   };
 
-  const filtered = images.filter(img => {
-    const matchesSearch = img.repository.toLowerCase().includes(search.toLowerCase()) ||
-                          img.tag.toLowerCase().includes(search.toLowerCase()) ||
-                          img.id.toLowerCase().includes(search.toLowerCase());
-    
-    if (filterInUse) {
-      const isInUse = containers.some(c => c.image.includes(img.repository) || c.image.includes(img.id));
-      return matchesSearch && isInUse;
-    }
-    
-    return matchesSearch;
-  }).sort((a, b) => {
-    if (!sortConfig) return 0;
-    const { key, direction } = sortConfig;
-    let comparison = 0;
-    
-    if (key === 'created_at') {
-      comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    } else if (key === 'repository') {
-      comparison = a.repository.localeCompare(b.repository);
-    } else if (key === 'size') {
-      // Basic size comparison logic (could be improved)
-      comparison = parseFloat(a.size) - parseFloat(b.size);
-    }
-    
-    return direction === 'asc' ? comparison : -comparison;
-  });
+  const filtered = images
+    .filter((img) => {
+      const matchesSearch =
+        img.repository.toLowerCase().includes(search.toLowerCase()) ||
+        img.tag.toLowerCase().includes(search.toLowerCase()) ||
+        img.id.toLowerCase().includes(search.toLowerCase());
 
-  const pullingList = Object.entries(pullingImages).map(([name, data]) => {
-    const [repo, tag] = name.split(':');
-    return {
-      id: `pulling-${name}`,
-      repository: repo,
-      tag: tag || 'latest',
-      size: 'Pulling...',
-      created_at: new Date().toISOString(),
-      isPulling: true,
-      status: data.status,
-      progress: data.progress
-    };
-  }).filter(img => 
-    img.repository.toLowerCase().includes(search.toLowerCase()) ||
-    img.tag.toLowerCase().includes(search.toLowerCase())
-  );
+      if (filterInUse) {
+        const isInUse = containers.some((c) => c.image.includes(img.repository) || c.image.includes(img.id));
+        return matchesSearch && isInUse;
+      }
+
+      return matchesSearch;
+    })
+    .sort((a, b) => {
+      if (!sortConfig) return 0;
+      const { key, direction } = sortConfig;
+      let comparison = 0;
+
+      if (key === "created_at") {
+        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      } else if (key === "repository") {
+        comparison = a.repository.localeCompare(b.repository);
+      } else if (key === "size") {
+        // Basic size comparison logic (could be improved)
+        comparison = parseFloat(a.size) - parseFloat(b.size);
+      }
+
+      return direction === "asc" ? comparison : -comparison;
+    });
+
+  const pullingList = Object.entries(pullingImages)
+    .map(([name, data]) => {
+      const [repo, tag] = name.split(":");
+      return {
+        id: `pulling-${name}`,
+        repository: repo,
+        tag: tag || "latest",
+        size: "Pulling...",
+        created_at: pullingCreatedAt,
+        isPulling: true,
+        status: data.status,
+        progress: data.progress,
+      };
+    })
+    .filter(
+      (img) =>
+        img.repository.toLowerCase().includes(search.toLowerCase()) ||
+        img.tag.toLowerCase().includes(search.toLowerCase()),
+    );
 
   const requestSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction: "asc" | "desc" = "asc";
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
     }
     setSortConfig({ key, direction });
   };
@@ -199,22 +174,20 @@ const Images = () => {
     if (selectedIds.length === filtered.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filtered.map(img => img.id));
+      setSelectedIds(filtered.map((img) => img.id));
     }
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    
+
     const count = selectedIds.length;
     let successCount = 0;
-    
+
     setIsRefreshing(true);
     for (const id of selectedIds) {
       try {
@@ -225,7 +198,7 @@ const Images = () => {
       }
     }
     setIsRefreshing(false);
-    
+
     showSuccess(`${successCount}/${count} images deleted`);
     setSelectedIds([]);
     refreshImages();
@@ -247,7 +220,9 @@ const Images = () => {
 
   const openRunContainerDialog = (image: Image) => {
     setSelectedImageToRun(image);
-    setContainerName(`${image.repository.replace(/[^a-zA-Z0-9_.-]/g, '')}-${image.tag.replace(/[^a-zA-Z0-9_.-]/g, '')}-${Date.now().toString().slice(-4)}`);
+    setContainerName(
+      `${image.repository.replace(/[^a-zA-Z0-9_.-]/g, "")}-${image.tag.replace(/[^a-zA-Z0-9_.-]/g, "")}-${Date.now().toString().slice(-4)}`,
+    );
     setContainerPorts("");
     setContainerEnvs("");
     setContainerVolumes("");
@@ -258,12 +233,29 @@ const Images = () => {
     if (!selectedImageToRun || !containerName) return;
 
     try {
-      const ports = containerPorts.split(',').map(p => p.trim()).filter(p => p);
-      const envs = containerEnvs.split('\n').map(e => e.trim()).filter(e => e);
-      const volumes = containerVolumes.split('\n').map(v => v.trim()).filter(v => v);
+      const ports = containerPorts
+        .split(",")
+        .map((p) => p.trim())
+        .filter((p) => p);
+      const envs = containerEnvs
+        .split("\n")
+        .map((e) => e.trim())
+        .filter((e) => e);
+      const volumes = containerVolumes
+        .split("\n")
+        .map((v) => v.trim())
+        .filter((v) => v);
 
-      await createContainer(containerName, `${selectedImageToRun.repository}:${selectedImageToRun.tag}`, ports, envs, volumes);
-      showSuccess(`Container ${containerName} created from image ${selectedImageToRun.repository}:${selectedImageToRun.tag}`);
+      await createContainer(
+        containerName,
+        `${selectedImageToRun.repository}:${selectedImageToRun.tag}`,
+        ports,
+        envs,
+        volumes,
+      );
+      showSuccess(
+        `Container ${containerName} created from image ${selectedImageToRun.repository}:${selectedImageToRun.tag}`,
+      );
       setShowRunContainerDialog(false);
       refreshImages(); // Refresh images to reflect container usage
     } catch (err) {
@@ -336,17 +328,17 @@ const Images = () => {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search images by name, tag or ID..." 
+            <Input
+              placeholder="Search images by name, tag or ID..."
               className="bg-card border-border text-foreground pl-10 focus-visible:ring-0 focus-visible:ring-offset-0 h-11"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 h-11 shrink-0">
-            <Checkbox 
-              id="filter-in-use" 
-              checked={filterInUse} 
+            <Checkbox
+              id="filter-in-use"
+              checked={filterInUse}
               onCheckedChange={(checked) => setFilterInUse(!!checked)}
               className="border-border data-[state=checked]:bg-blue-600"
             />
@@ -367,39 +359,48 @@ const Images = () => {
                     className="border-border data-[state=checked]:bg-blue-600"
                   />
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => requestSort('repository')}
+                  onClick={() => requestSort("repository")}
                 >
                   <div className="flex items-center gap-1">
                     Repository
-                    {sortConfig?.key === 'repository' && (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                    )}
+                    {sortConfig?.key === "repository" &&
+                      (sortConfig.direction === "asc" ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      ))}
                   </div>
                 </TableHead>
                 <TableHead className="text-muted-foreground font-medium">Tag</TableHead>
                 <TableHead className="text-muted-foreground font-medium">Image ID</TableHead>
-                <TableHead 
+                <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => requestSort('size')}
+                  onClick={() => requestSort("size")}
                 >
                   <div className="flex items-center gap-1">
                     Size
-                    {sortConfig?.key === 'size' && (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                    )}
+                    {sortConfig?.key === "size" &&
+                      (sortConfig.direction === "asc" ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      ))}
                   </div>
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => requestSort('created_at')}
+                  onClick={() => requestSort("created_at")}
                 >
                   <div className="flex items-center gap-1">
                     Created
-                    {sortConfig?.key === 'created_at' && (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                    )}
+                    {sortConfig?.key === "created_at" &&
+                      (sortConfig.direction === "asc" ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      ))}
                   </div>
                 </TableHead>
                 <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
@@ -409,16 +410,30 @@ const Images = () => {
               {isInitialLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i} className="border-border">
-                    <TableCell><Skeleton className="h-4 w-4" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-4" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-40" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Skeleton className="h-8 w-8 ml-auto" />
+                    </TableCell>
                   </TableRow>
                 ))
-              ) : (pullingList.length > 0 || filtered.length > 0) ? (
+              ) : pullingList.length > 0 || filtered.length > 0 ? (
                 <>
                   {pullingList.map((img) => (
                     <TableRow key={img.id} className="border-border bg-blue-500/5 animate-pulse">
@@ -451,7 +466,7 @@ const Images = () => {
                       key={img.id}
                       className={cn(
                         "border-border hover:bg-muted transition-colors",
-                        selectedIds.includes(img.id) && "bg-muted"
+                        selectedIds.includes(img.id) && "bg-muted",
                       )}
                     >
                       <TableCell>
@@ -465,7 +480,7 @@ const Images = () => {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             {img.repository}
-                            {containers.some(c => c.image.includes(img.repository) || c.image.includes(img.id)) && (
+                            {containers.some((c) => c.image.includes(img.repository) || c.image.includes(img.id)) && (
                               <span className="bg-blue-500/10 text-blue-500 text-[10px] px-1.5 py-0.5 rounded border border-blue-500/20 font-medium">
                                 In Use
                               </span>
@@ -480,14 +495,12 @@ const Images = () => {
                       </TableCell>
                       <TableCell className="text-muted-foreground text-xs font-mono">{img.id}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">
-                      <div className="flex items-center gap-2">
-                        <HardDrive className="w-3 h-3 text-muted-foreground" />
-                        {img.size}
-                      </div>
+                        <div className="flex items-center gap-2">
+                          <HardDrive className="w-3 h-3 text-muted-foreground" />
+                          {img.size}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {dayjs(img.created_at).fromNow()}
-                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{dayjs(img.created_at).fromNow()}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -498,23 +511,35 @@ const Images = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-[160px] bg-card border-border">
                             <DropdownMenuLabel className="text-muted-foreground">Actions</DropdownMenuLabel>
-                             <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => openInspect(img)}>
+                            <DropdownMenuItem
+                              className="hover:bg-muted focus:bg-muted cursor-pointer"
+                              onClick={() => openInspect(img)}
+                            >
                               <Eye className="mr-2 h-4 w-4 text-emerald-500" />
                               <span>Inspect</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => openRunContainerDialog(img)}>
+                            <DropdownMenuItem
+                              className="hover:bg-muted focus:bg-muted cursor-pointer"
+                              onClick={() => openRunContainerDialog(img)}
+                            >
                               <Play className="mr-2 h-4 w-4 text-blue-500" />
                               <span>Run</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => {
-                              navigator.clipboard.writeText(img.id);
-                              showSuccess("Image ID copied to clipboard");
-                            }}>
+                            <DropdownMenuItem
+                              className="hover:bg-muted focus:bg-muted cursor-pointer"
+                              onClick={() => {
+                                navigator.clipboard.writeText(img.id);
+                                showSuccess("Image ID copied to clipboard");
+                              }}
+                            >
                               <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
                               <span>Copy ID</span>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator className="bg-border" />
-                            <DropdownMenuItem onClick={() => handleDelete(img.id, img.repository)} className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer">
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(img.id, img.repository)}
+                              className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer"
+                            >
                               <Trash2 className="mr-2 h-4 w-4" />
                               <span>Delete</span>
                             </DropdownMenuItem>
@@ -537,7 +562,10 @@ const Images = () => {
       </div>
 
       <Sheet open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
-        <SheetContent side="right" className="w-[80%] sm:w-[80%] sm:max-w-none bg-background border-border text-foreground flex flex-col p-0 gap-0">
+        <SheetContent
+          side="right"
+          className="w-[80%] sm:w-[80%] sm:max-w-none bg-background border-border text-foreground flex flex-col p-0 gap-0"
+        >
           <SheetHeader className="p-5 border-b border-border shrink-0 text-left">
             <SheetTitle className="text-foreground flex items-center gap-2">
               <Eye className="w-5 h-5 text-emerald-500" />
@@ -566,13 +594,17 @@ const Images = () => {
               className="bg-card border-border text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
               value={pullImageUrl}
               onChange={(e) => setPullImageUrl(e.target.value)}
-              disabled={Object.keys(pullingImages).some(name => name === (pullImageUrl.includes(':') ? pullImageUrl : `${pullImageUrl}:latest`))}
+              disabled={Object.keys(pullingImages).some(
+                (name) => name === (pullImageUrl.includes(":") ? pullImageUrl : `${pullImageUrl}:latest`),
+              )}
             />
-            
+
             {Object.entries(pullingImages).map(([imageName, { status, progress }]) => (
               <div key={imageName} className="space-y-2 animate-in fade-in slide-in-from-top-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Pulling {imageName}: {status}</span>
+                  <span className="text-muted-foreground">
+                    Pulling {imageName}: {status}
+                  </span>
                   {progress !== null && <span className="text-blue-400 font-mono">{progress}%</span>}
                 </div>
                 {progress !== null ? (
@@ -582,7 +614,7 @@ const Images = () => {
                 )}
               </div>
             ))}
-            
+
             {!Object.keys(pullingImages).length && (
               <p className="text-xs text-muted-foreground mt-2">
                 Enter the image name and tag to pull from Docker Hub.
@@ -590,15 +622,28 @@ const Images = () => {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPullDialog(false)} disabled={Object.keys(pullingImages).length > 0}>
+            <Button
+              variant="outline"
+              onClick={() => setShowPullDialog(false)}
+              disabled={Object.keys(pullingImages).length > 0}
+            >
               Cancel
             </Button>
-            <Button 
-              className="bg-blue-600 hover:bg-blue-700 text-white" 
-              onClick={handlePull} 
-              disabled={!pullImageUrl || Object.keys(pullingImages).some(name => name === (pullImageUrl.includes(':') ? pullImageUrl : `${pullImageUrl}:latest`))}
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handlePull}
+              disabled={
+                !pullImageUrl ||
+                Object.keys(pullingImages).some(
+                  (name) => name === (pullImageUrl.includes(":") ? pullImageUrl : `${pullImageUrl}:latest`),
+                )
+              }
             >
-              {Object.keys(pullingImages).some(name => name === (pullImageUrl.includes(':') ? pullImageUrl : `${pullImageUrl}:latest`)) ? "Pulling..." : "Pull Image"}
+              {Object.keys(pullingImages).some(
+                (name) => name === (pullImageUrl.includes(":") ? pullImageUrl : `${pullImageUrl}:latest`),
+              )
+                ? "Pulling..."
+                : "Pull Image"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -607,11 +652,15 @@ const Images = () => {
       <Dialog open={showRunContainerDialog} onOpenChange={setShowRunContainerDialog}>
         <DialogContent className="bg-background border-border text-foreground">
           <DialogHeader>
-            <DialogTitle>Run Container from Image: {selectedImageToRun?.repository}:{selectedImageToRun?.tag}</DialogTitle>
+            <DialogTitle>
+              Run Container from Image: {selectedImageToRun?.repository}:{selectedImageToRun?.tag}
+            </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div>
-              <Label htmlFor="containerName" className="mb-2 block text-sm font-medium">Container Name</Label>
+              <Label htmlFor="containerName" className="mb-2 block text-sm font-medium">
+                Container Name
+              </Label>
               <Input
                 id="containerName"
                 placeholder="e.g. my-nginx-container"
@@ -621,7 +670,9 @@ const Images = () => {
               />
             </div>
             <div>
-              <Label htmlFor="containerPorts" className="mb-2 block text-sm font-medium">Port Mappings (e.g. 8080:80, 8443:443)</Label>
+              <Label htmlFor="containerPorts" className="mb-2 block text-sm font-medium">
+                Port Mappings (e.g. 8080:80, 8443:443)
+              </Label>
               <Input
                 id="containerPorts"
                 placeholder="HostPort:ContainerPort, ..."
@@ -631,7 +682,9 @@ const Images = () => {
               />
             </div>
             <div>
-              <Label htmlFor="containerEnvs" className="mb-2 block text-sm font-medium">Environment Variables (one per line, e.g. MY_VAR=value)</Label>
+              <Label htmlFor="containerEnvs" className="mb-2 block text-sm font-medium">
+                Environment Variables (one per line, e.g. MY_VAR=value)
+              </Label>
               <textarea
                 id="containerEnvs"
                 rows={3}
@@ -642,7 +695,9 @@ const Images = () => {
               />
             </div>
             <div>
-              <Label htmlFor="containerVolumes" className="mb-2 block text-sm font-medium">Volume Mappings (one per line, e.g. /host/path:/container/path)</Label>
+              <Label htmlFor="containerVolumes" className="mb-2 block text-sm font-medium">
+                Volume Mappings (one per line, e.g. /host/path:/container/path)
+              </Label>
               <textarea
                 id="containerVolumes"
                 rows={3}
@@ -657,7 +712,11 @@ const Images = () => {
             <Button variant="outline" onClick={() => setShowRunContainerDialog(false)}>
               Cancel
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleRunContainer} disabled={!containerName || !selectedImageToRun}>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleRunContainer}
+              disabled={!containerName || !selectedImageToRun}
+            >
               Run Container
             </Button>
           </DialogFooter>
@@ -672,8 +731,8 @@ const Images = () => {
               Prune Unused Images
             </DialogTitle>
             <DialogDescription className="text-muted-foreground pt-2">
-              This will remove all dangling images and images not used by at least one container.
-              This action cannot be undone. Are you sure?
+              This will remove all dangling images and images not used by at least one container. This action cannot be
+              undone. Are you sure?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">

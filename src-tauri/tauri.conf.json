@@ -1,6 +1,6 @@
 {
   "productName": "Docker Native Manager",
-  "version": "1.6.1",
+  "version": "1.18.1",
   "identifier": "com.pflabs.dockernm",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -15,24 +15,20 @@
         "title": "Docker Native Manager",
         "width": 1280,
         "height": 720,
+        "minWidth": 1280,
+        "minHeight": 720,
         "decorations": false,
         "transparent": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.github.com"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "linux": {
       "deb": {
         "depends": []

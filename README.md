@@ -4,10 +4,11 @@
 [![React](https://img.shields.io/badge/React-19.2-blue?logo=react)](https://react.dev)
 [![Rust](https://img.shields.io/badge/Rust-1.80%2B-orange?logo=rust)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+<a href="https://www.buymeacoffee.com/pedrofariasx" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" style="height: 20px !important;width: 78px !important;" ></a>
 
 A modern, native, and blazing-fast desktop application to manage your Docker environments, built with **Tauri v2**, **React**, **TypeScript**, and **Rust**.
 
-![alt text](<dockernm.png>)
+![alt text](dockernm.png)
 
 ## ✨ Features
 
@@ -26,6 +27,20 @@ A modern, native, and blazing-fast desktop application to manage your Docker env
 
 ## 🚀 Getting Started
 
+### ⚠️ Docker Permissions (Required)
+
+This application connects directly to the Docker daemon (via `/var/run/docker.sock`), so **your user must be in the `docker` group** — otherwise the app won't be able to list or manage your containers/images, regardless of how you installed it (`.deb`, `.rpm`, AUR, AppImage, or built from source).
+
+If you can't run `docker run hello-world` without `sudo`, set it up first:
+
+```bash
+sudo groupadd docker
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+Log out and back in (or restart your VM, if you're using one) for the change to take full effect. Full details in the [official Docker post-install guide](https://docs.docker.com/engine/install/linux-postinstall/).
+
 ### Prerequisites
 
 - Node.js (`v20` or higher recommended)
@@ -34,20 +49,53 @@ A modern, native, and blazing-fast desktop application to manage your Docker env
 - Docker Desktop or Docker Engine running locally
 
 ### Distributions using DPKG (Debian, Ubuntu, Mint, etc.)
+
+> **Requires glibc 2.34 or newer** (Ubuntu 22.04+, Debian 12+). Ubuntu 20.04 and Debian 11 are not supported.
+
+The fastest way:
+
+```bash
+curl -fsSL https://pedrofariasx.github.io/dockernativemanager/install.sh | sudo bash
+```
+
+Or add the APT repository manually to receive automatic updates:
+
+```bash
+curl -fsSL https://pedrofariasx.github.io/dockernativemanager/pubkey.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/dockernativemanager.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/dockernativemanager.gpg] https://pedrofariasx.github.io/dockernativemanager stable main" \
+  | sudo tee /etc/apt/sources.list.d/dockernativemanager.list
+
+sudo apt update
+sudo apt install docker-native-manager
+```
+
+Or install the `.deb` manually from the [latest release](https://github.com/pedrofariasx/dockernativemanager/releases/latest):
+
 ```bash
 sudo apt install ./docker-native-manager-x.y.z-x86_64.deb
 ```
+
 ### Distributions using RPM (Fedora/openSUSE, etc.)
+
 ```bash
 sudo dnf install ./docker-native-manager-x.y.z-x86_64.rpm
 sudo zypper install ./docker-native-manager-x.y.z-x86_64.rpm
 ```
+
 ### Distributions using ALPM (Arch Linux, CachyOS, SteamOS, etc.)
+
+Available on the AUR as [`docker-native-manager-bin`](https://aur.archlinux.org/packages/docker-native-manager-bin):
+
 ```bash
-sudo pacman -U ./docker-native-manager-x.y.z-x86_64.pkg.tar.zst 
+yay -S docker-native-manager-bin
+# or
+paru -S docker-native-manager-bin
 ```
 
 ### Portable installation (AppImage)
+
 ```bash
 chmod +x docker-native-manager-x.y.z-x86_64.AppImage && ./docker-native-manager-x.y.z-x86_64.AppImage
 ```
@@ -55,12 +103,14 @@ chmod +x docker-native-manager-x.y.z-x86_64.AppImage && ./docker-native-manager-
 ### Manual Installation
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/pedrofariasx/dockernativemanager.git
    cd dockernativemanager
    ```
 
 2. Install dependencies:
+
    ```bash
    pnpm install
    ```
@@ -101,7 +151,3 @@ Feel free to check [issues page](https://github.com/pedrofariasx/dockernativeman
 ## 📝 License
 
 This project is [MIT](https://opensource.org/licenses/MIT) licensed.
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=pedrofariasx/dockernativemanager&type=Date)](https://www.star-history.com/#pedrofariasx/dockernativemanager&Date)

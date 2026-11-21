@@ -2,24 +2,26 @@
  * File: images.rs
  * Project: docker-native-manager
  * Created: 2026-03-17
- * 
- * Last Modified: Tue Mar 17 2026
+ *
+ * Last Modified: Wed Apr 01 2026
  * Modified By: Pedro Farias
- * 
+ *
  */
 
-use bollard::image::{ListImagesOptions, RemoveImageOptions, CreateImageOptions, PruneImagesOptions};
-use futures_util::stream::StreamExt;
-use chrono::{TimeZone, Local};
-use tauri::{AppHandle, Emitter};
 use crate::models::ImageInfo;
 use crate::utils::get_docker;
+use bollard::query_parameters::{
+    CreateImageOptions, ListImagesOptions, PruneImagesOptions, RemoveImageOptions,
+};
+use chrono::{Local, TimeZone};
+use futures_util::stream::StreamExt;
+use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
 pub async fn get_images() -> Result<Vec<ImageInfo>, String> {
-    let docker = get_docker()?;
+    let docker = get_docker().await?;
     let images = docker
-        .list_images(Some(ListImagesOptions::<String> {
+        .list_images(Some(ListImagesOptions {
             all: true,
             ..Default::default()
         }))
@@ -29,15 +31,44 @@ pub async fn get_images() -> Result<Vec<ImageInfo>, String> {
     Ok(images
         .into_iter()
         .map(|img| {
-            let repo_tag = img.repo_tags.first().cloned().unwrap_or_else(|| "none:none".to_string());
-            let parts: Vec<&str> = repo_tag.split(':').collect();
+            // Priority: repo_tags -> repo_digests -> "none"
+            let (repo, tag) = if let Some(tag) = img.repo_tags.first() {
+                if tag == "<none>:<none>" {
+                    // Check digests for more info
+                    if let Some(digest) = img.repo_digests.first() {
+                        let d_parts: Vec<&str> = digest.split('@').collect();
+                        (
+                            d_parts.first().unwrap_or(&"none").to_string(),
+                            "sha256".to_string(),
+                        )
+                    } else {
+                        ("none".to_string(), "none".to_string())
+                    }
+                } else {
+                    let parts: Vec<&str> = tag.split(':').collect();
+                    (
+                        parts.first().unwrap_or(&"none").to_string(),
+                        parts.get(1).unwrap_or(&"none").to_string(),
+                    )
+                }
+            } else if let Some(digest) = img.repo_digests.first() {
+                let d_parts: Vec<&str> = digest.split('@').collect();
+                (
+                    d_parts.first().unwrap_or(&"none").to_string(),
+                    "sha256".to_string(),
+                )
+            } else {
+                ("none".to_string(), "none".to_string())
+            };
+
             ImageInfo {
                 id: img.id.replace("sha256:", "").chars().take(12).collect(),
-                repository: parts.first().unwrap_or(&"none").to_string(),
-                tag: parts.get(1).unwrap_or(&"none").to_string(),
+                repository: repo,
+                tag,
                 size: format!("{:.2} MB", img.size as f64 / 1024.0 / 1024.0),
                 created: img.created.to_string(),
-                created_at: Local.timestamp_opt(img.created, 0)
+                created_at: Local
+                    .timestamp_opt(img.created, 0)
                     .single()
                     .map(|dt| dt.to_rfc3339())
                     .unwrap_or_else(|| "unknown".to_string()),
@@ -48,15 +79,18 @@ pub async fn get_images() -> Result<Vec<ImageInfo>, String> {
 
 #[tauri::command]
 pub async fn delete_image(id: String) -> Result<(), String> {
-    let docker = get_docker()?;
-    docker.remove_image(&id, None::<RemoveImageOptions>, None).await.map_err(|e| e.to_string())?;
+    let docker = get_docker().await?;
+    docker
+        .remove_image(&id, None::<RemoveImageOptions>, None)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn pull_image(app_handle: AppHandle, image: String) -> Result<(), String> {
-    let docker = get_docker()?;
-    
+    let docker = get_docker().await?;
+
     let full_image = if image.contains(':') {
         image
     } else {
@@ -65,7 +99,7 @@ pub async fn pull_image(app_handle: AppHandle, image: String) -> Result<(), Stri
 
     let mut stream = docker.create_image(
         Some(CreateImageOptions {
-            from_image: full_image.clone(),
+            from_image: Some(full_image.clone()),
             ..Default::default()
         }),
         None,
@@ -75,8 +109,12 @@ pub async fn pull_image(app_handle: AppHandle, image: String) -> Result<(), Stri
     while let Some(item) = stream.next().await {
         match item {
             Ok(progress) => {
-                if let Some(error) = progress.error {
-                    return Err(format!("Docker pull error: {}", error));
+                if let Some(message) = progress
+                    .error_detail
+                    .as_ref()
+                    .and_then(|e| e.message.clone())
+                {
+                    return Err(format!("Docker pull error: {}", message));
                 }
                 let _ = app_handle.emit(&format!("pull-progress-{}", full_image), progress);
             }
@@ -89,18 +127,25 @@ pub async fn pull_image(app_handle: AppHandle, image: String) -> Result<(), Stri
 
 #[tauri::command]
 pub async fn prune_images() -> Result<String, String> {
-    let docker = get_docker()?;
-    let result = docker.prune_images(None::<PruneImagesOptions<String>>).await.map_err(|e| e.to_string())?;
-    
+    let docker = get_docker().await?;
+    let result = docker
+        .prune_images(None::<PruneImagesOptions>)
+        .await
+        .map_err(|e| e.to_string())?;
+
     let reclaimed = result.space_reclaimed.unwrap_or(0);
     let count = result.images_deleted.unwrap_or_default().len();
-    
-    Ok(format!("Deleted {} images, reclaimed {:.2} MB", count, reclaimed as f64 / 1024.0 / 1024.0))
+
+    Ok(format!(
+        "Deleted {} images, reclaimed {:.2} MB",
+        count,
+        reclaimed as f64 / 1024.0 / 1024.0
+    ))
 }
 
 #[tauri::command]
 pub async fn inspect_image(id: String) -> Result<String, String> {
-    let docker = get_docker()?;
+    let docker = get_docker().await?;
     let inspect = docker.inspect_image(&id).await.map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
 }

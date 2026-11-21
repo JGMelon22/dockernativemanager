@@ -2,10 +2,10 @@
  * File: main.rs
  * Project: docker-native-manager
  * Created: 2026-03-13
- * 
- * Last Modified: Thu Mar 19 2026
+ *
+ * Last Modified: Wed Apr 15 2026
  * Modified By: Pedro Farias
- * 
+ *
  * Copyright (c) 2026 Pedro Farias
  * License: MIT
  */
@@ -13,21 +13,24 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod models;
-mod utils;
 mod commands;
+mod models;
 mod tasks;
+mod utils;
 
-use std::collections::HashMap;
-use utils::TerminalSenders;
+#[cfg(test)]
+mod tests;
+
 use commands::containers::*;
 use commands::images::*;
-use commands::volumes::*;
 use commands::networks::*;
 use commands::stacks::*;
-use commands::system::*;
 use commands::swarm::*;
-use tasks::{listen_to_docker_events, emit_container_stats, emit_host_stats};
+use commands::system::*;
+use commands::volumes::*;
+use std::collections::HashMap;
+use tasks::{emit_container_stats, emit_host_stats, listen_to_docker_events};
+use utils::TerminalSenders;
 
 fn main() {
     tauri::Builder::default()
@@ -37,7 +40,7 @@ fn main() {
             let handle = app.handle().clone();
             let handle_stats = app.handle().clone();
             let handle_host_stats = app.handle().clone();
-            
+
             tauri::async_runtime::spawn(async move {
                 listen_to_docker_events(handle).await;
             });
@@ -82,6 +85,8 @@ fn main() {
             inspect_volume,
             inspect_network,
             get_system_info,
+            open_external_link,
+            download_update,
             exec_container,
             write_stdin,
             prune_volumes,
@@ -106,7 +111,17 @@ fn main() {
             list_docker_contexts,
             use_docker_context,
             create_docker_context,
-            remove_docker_context
+            remove_docker_context,
+            test_docker_connection,
+            setup_docker_context_with_password,
+            generate_ssh_key,
+            list_ssh_keys,
+            configure_ssh_host,
+            remove_ssh_host_config,
+            list_volume_files,
+            read_volume_file,
+            delete_volume_file,
+            upload_volume_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

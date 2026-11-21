@@ -3,29 +3,27 @@
  * Project: docker-native-manager
  * Created: 2026-03-13
  * Author: Pedro Farias
- * 
+ *
  * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
- * 
+ *
  * Copyright (c) 2026 Pedro Farias
  * License: MIT
  */
 
-"use client";
-
 import { useDocker } from "@/context/DockerContext";
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useDockerEvent } from "@/hooks/use-docker-events";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { deleteNetwork, createNetwork, Network, inspectNetwork, pruneNetworks, connectContainerToNetwork, disconnectContainerFromNetwork, getContainers } from "@/lib/docker";
 import {
-  Table,
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
+  deleteNetwork,
+  createNetwork,
+  Network,
+  inspectNetwork,
+  pruneNetworks,
+  connectContainerToNetwork,
+  disconnectContainerFromNetwork,
+} from "@/lib/docker";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -52,44 +50,27 @@ import {
   Unlink,
   Settings2,
   Container,
-  X
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { showSuccess, showError } from "@/utils/toast";
-import { 
-  Dialog, 
+import {
+  Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
 const Networks = () => {
-  const {
-    networks,
-    loading,
-    refreshNetworks,
-    containers
-  } = useDocker();
+  const { networks, loading, refreshNetworks, containers } = useDocker();
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [driverFilter, setDriverFilter] = useState<string>("all");
@@ -107,7 +88,7 @@ const Networks = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState<Network | null>(null);
   const [inspectData, setInspectData] = useState("");
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
 
   const handleDelete = async (id: string, name: string) => {
     try {
@@ -151,58 +132,58 @@ const Networks = () => {
     }
   };
 
-  const filtered = networks.filter(n => {
-    const matchesSearch = n.name.toLowerCase().includes(search.toLowerCase()) ||
-                          n.driver.toLowerCase().includes(search.toLowerCase());
-    const matchesDriver = driverFilter === "all" || n.driver === driverFilter;
-    return matchesSearch && matchesDriver;
-  }).sort((a, b) => {
-    if (!sortConfig) return 0;
-    const { key, direction } = sortConfig;
-    let comparison = 0;
-    
-    if (key === 'name') {
-      comparison = a.name.localeCompare(b.name);
-    } else if (key === 'id') {
-      comparison = a.id.localeCompare(b.id);
-    } else if (key === 'driver') {
-      comparison = a.driver.localeCompare(b.driver);
-    } else if (key === 'scope') {
-      comparison = a.scope.localeCompare(b.scope);
-    }
-    
-    return direction === 'asc' ? comparison : -comparison;
-  });
+  const filtered = networks
+    .filter((n) => {
+      const matchesSearch =
+        n.name.toLowerCase().includes(search.toLowerCase()) || n.driver.toLowerCase().includes(search.toLowerCase());
+      const matchesDriver = driverFilter === "all" || n.driver === driverFilter;
+      return matchesSearch && matchesDriver;
+    })
+    .sort((a, b) => {
+      if (!sortConfig) return 0;
+      const { key, direction } = sortConfig;
+      let comparison = 0;
+
+      if (key === "name") {
+        comparison = a.name.localeCompare(b.name);
+      } else if (key === "id") {
+        comparison = a.id.localeCompare(b.id);
+      } else if (key === "driver") {
+        comparison = a.driver.localeCompare(b.driver);
+      } else if (key === "scope") {
+        comparison = a.scope.localeCompare(b.scope);
+      }
+
+      return direction === "asc" ? comparison : -comparison;
+    });
 
   const requestSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction: "asc" | "desc" = "asc";
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
     }
     setSortConfig({ key, direction });
   };
 
-  const drivers = Array.from(new Set(networks.map(n => n.driver)));
+  const drivers = Array.from(new Set(networks.map((n) => n.driver)));
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filtered.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filtered.map(n => n.id));
+      setSelectedIds(filtered.map((n) => n.id));
     }
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     const count = selectedIds.length;
     let successCount = 0;
-    
+
     for (const id of selectedIds) {
       try {
         await deleteNetwork(id);
@@ -211,7 +192,7 @@ const Networks = () => {
         console.error(`Failed to delete network ${id}:`, err);
       }
     }
-    
+
     showSuccess(`${successCount}/${count} networks deleted`);
     setSelectedIds([]);
     refreshNetworks();
@@ -351,8 +332,10 @@ const Networks = () => {
               </SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="all">All Drivers</SelectItem>
-                {drivers.map(d => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                {drivers.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -370,139 +353,175 @@ const Networks = () => {
                     className="border-border data-[state=checked]:bg-blue-600"
                   />
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => requestSort('name')}
+                  onClick={() => requestSort("name")}
                 >
                   <div className="flex items-center gap-1">
                     Name
-                    {sortConfig?.key === 'name' && (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                    )}
+                    {sortConfig?.key === "name" &&
+                      (sortConfig.direction === "asc" ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      ))}
                   </div>
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => requestSort('id')}
+                  onClick={() => requestSort("id")}
                 >
                   <div className="flex items-center gap-1">
                     Network ID
-                    {sortConfig?.key === 'id' && (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                    )}
+                    {sortConfig?.key === "id" &&
+                      (sortConfig.direction === "asc" ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      ))}
                   </div>
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => requestSort('driver')}
+                  onClick={() => requestSort("driver")}
                 >
                   <div className="flex items-center gap-1">
                     Driver
-                    {sortConfig?.key === 'driver' && (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                    )}
+                    {sortConfig?.key === "driver" &&
+                      (sortConfig.direction === "asc" ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      ))}
                   </div>
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors"
-                  onClick={() => requestSort('scope')}
+                  onClick={() => requestSort("scope")}
                 >
                   <div className="flex items-center gap-1">
                     Scope
-                    {sortConfig?.key === 'scope' && (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                    )}
+                    {sortConfig?.key === "scope" &&
+                      (sortConfig.direction === "asc" ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      ))}
                   </div>
                 </TableHead>
                 <TableHead className="text-muted-foreground font-medium text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
-          <TableBody>
-            {isInitialLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i} className="border-border">
-                  <TableCell><Skeleton className="h-4 w-4" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+            <TableBody>
+              {isInitialLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="border-border">
+                    <TableCell>
+                      <Skeleton className="h-4 w-4" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-40" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Skeleton className="h-8 w-8 ml-auto" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : filtered.length > 0 ? (
+                filtered.map((n) => (
+                  <TableRow
+                    key={n.id}
+                    className={cn(
+                      "border-border hover:bg-muted transition-colors",
+                      selectedIds.includes(n.id) && "bg-muted",
+                    )}
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.includes(n.id)}
+                        onCheckedChange={() => toggleSelect(n.id)}
+                        className="border-border data-[state=checked]:bg-blue-600"
+                      />
+                    </TableCell>
+                    <TableCell className="font-semibold text-foreground">
+                      <div className="flex items-center gap-2">
+                        <Share2 className="w-4 h-4 text-emerald-500" />
+                        {n.name}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs font-mono">{n.id}</TableCell>
+                    <TableCell>
+                      <span className="bg-muted text-muted-foreground text-[10px] px-2 py-0.5 rounded border border-border font-mono">
+                        {n.driver}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs capitalize">{n.scope}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[160px] bg-card border-border">
+                          <DropdownMenuLabel className="text-muted-foreground">Actions</DropdownMenuLabel>
+                          <DropdownMenuItem
+                            className="hover:bg-muted focus:bg-muted cursor-pointer"
+                            onClick={() => openInspect(n)}
+                          >
+                            <Eye className="mr-2 h-4 w-4 text-emerald-500" />
+                            <span>Inspect</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="hover:bg-muted focus:bg-muted cursor-pointer"
+                            onClick={() => {
+                              setConnectingNetwork(n);
+                              setShowConnectDialog(true);
+                            }}
+                          >
+                            <Link className="mr-2 h-4 w-4 text-blue-500" />
+                            <span>Connect</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-border" />
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(n.id, n.name)}
+                            className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                    No networks found.
+                  </TableCell>
                 </TableRow>
-              ))
-            ) : filtered.length > 0 ? (
-              filtered.map((n) => (
-                <TableRow
-                  key={n.id}
-                  className={cn(
-                    "border-border hover:bg-muted transition-colors",
-                    selectedIds.includes(n.id) && "bg-muted"
-                  )}
-                >
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedIds.includes(n.id)}
-                      onCheckedChange={() => toggleSelect(n.id)}
-                      className="border-border data-[state=checked]:bg-blue-600"
-                    />
-                  </TableCell>
-                  <TableCell className="font-semibold text-foreground">
-                    <div className="flex items-center gap-2">
-                      <Share2 className="w-4 h-4 text-emerald-500" />
-                      {n.name}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-xs font-mono">{n.id}</TableCell>
-                  <TableCell>
-                    <span className="bg-muted text-muted-foreground text-[10px] px-2 py-0.5 rounded border border-border font-mono">
-                      {n.driver}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-xs capitalize">{n.scope}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[160px] bg-card border-border">
-                        <DropdownMenuLabel className="text-muted-foreground">Actions</DropdownMenuLabel>
-                        <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => openInspect(n)}>
-                          <Eye className="mr-2 h-4 w-4 text-emerald-500" />
-                          <span>Inspect</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="hover:bg-muted focus:bg-muted cursor-pointer" onClick={() => {
-                          setConnectingNetwork(n);
-                          setShowConnectDialog(true);
-                        }}>
-                          <Link className="mr-2 h-4 w-4 text-blue-500" />
-                          <span>Connect</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-border" />
-                        <DropdownMenuItem onClick={() => handleDelete(n.id, n.name)} className="text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-500/10 cursor-pointer">
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          <span>Delete</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                  No networks found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
+              )}
+            </TableBody>
           </Table>
         </div>
       </div>
 
       <Sheet open={!!selectedNetwork} onOpenChange={(open) => !open && setSelectedNetwork(null)}>
-        <SheetContent side="right" className="w-[80%] sm:w-[80%] sm:max-w-none bg-background border-border text-foreground flex flex-col p-0 gap-0">
+        <SheetContent
+          side="right"
+          className="w-[80%] sm:w-[80%] sm:max-w-none bg-background border-border text-foreground flex flex-col p-0 gap-0"
+        >
           <SheetHeader className="p-5 border-b border-border shrink-0 text-left">
             <SheetTitle className="text-foreground flex items-center gap-2">
               <Eye className="w-5 h-5 text-emerald-500" />
@@ -520,12 +539,16 @@ const Networks = () => {
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Driver</p>
                     <div className="flex items-center gap-2">
                       <Settings2 className="w-4 h-4 text-blue-500" />
-                      <p className="text-lg font-semibold">{parsedInspectData[0]?.Driver || parsedInspectData.Driver}</p>
+                      <p className="text-lg font-semibold">
+                        {parsedInspectData[0]?.Driver || parsedInspectData.Driver}
+                      </p>
                     </div>
                   </div>
                   <div className="bg-card border border-border rounded-xl p-4 space-y-1">
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Scope</p>
-                    <p className="text-lg font-semibold capitalize">{parsedInspectData[0]?.Scope || parsedInspectData.Scope}</p>
+                    <p className="text-lg font-semibold capitalize">
+                      {parsedInspectData[0]?.Scope || parsedInspectData.Scope}
+                    </p>
                   </div>
                   <div className="bg-card border border-border rounded-xl p-4 space-y-1">
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Internal</p>
@@ -551,7 +574,12 @@ const Networks = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {Object.entries((parsedInspectData[0]?.Containers || parsedInspectData.Containers) || {}).map(([id, info]: [string, any]) => (
+                        {Object.entries(
+                          (parsedInspectData[0]?.Containers || parsedInspectData.Containers || {}) as Record<
+                            string,
+                            { Name: string; IPv4Address: string; MacAddress: string }
+                          >,
+                        ).map(([id, info]) => (
                           <TableRow key={id} className="border-border hover:bg-muted/50">
                             <TableCell className="font-medium">{info.Name}</TableCell>
                             <TableCell className="font-mono text-xs">{info.IPv4Address || "N/A"}</TableCell>
@@ -569,7 +597,8 @@ const Networks = () => {
                             </TableCell>
                           </TableRow>
                         ))}
-                        {Object.keys((parsedInspectData[0]?.Containers || parsedInspectData.Containers) || {}).length === 0 && (
+                        {Object.keys(parsedInspectData[0]?.Containers || parsedInspectData.Containers || {}).length ===
+                          0 && (
                           <TableRow>
                             <TableCell colSpan={4} className="h-20 text-center text-muted-foreground text-sm">
                               No containers connected to this network.
@@ -641,12 +670,7 @@ const Networks = () => {
                     <Label htmlFor="internal">Internal</Label>
                     <p className="text-[10px] text-muted-foreground">Restrict external access</p>
                   </div>
-                  <Switch
-                    id="internal"
-                    checked={newInternal}
-                    onCheckedChange={setNewInternal}
-                    disabled={isCreating}
-                  />
+                  <Switch id="internal" checked={newInternal} onCheckedChange={setNewInternal} disabled={isCreating} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
@@ -667,7 +691,11 @@ const Networks = () => {
             <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={isCreating}>
               Cancel
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleCreate} disabled={isCreating || !newName}>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleCreate}
+              disabled={isCreating || !newName}
+            >
               {isCreating ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
@@ -682,23 +710,38 @@ const Networks = () => {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="container">Select Container</Label>
-              <Select value={selectedContainerToConnect} onValueChange={setSelectedContainerToConnect} disabled={isConnecting}>
+              <Select
+                value={selectedContainerToConnect}
+                onValueChange={setSelectedContainerToConnect}
+                disabled={isConnecting}
+              >
                 <SelectTrigger id="container" className="w-full bg-card border-border h-10 focus:ring-blue-600">
                   <SelectValue placeholder="Select a container..." />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {containers.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.id.substring(0, 8)})</SelectItem>
+                  {containers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} ({c.id.substring(0, 8)})
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="border-border text-foreground" onClick={() => setShowConnectDialog(false)} disabled={isConnecting}>
+            <Button
+              variant="outline"
+              className="border-border text-foreground"
+              onClick={() => setShowConnectDialog(false)}
+              disabled={isConnecting}
+            >
               Cancel
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConnect} disabled={isConnecting || !selectedContainerToConnect}>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleConnect}
+              disabled={isConnecting || !selectedContainerToConnect}
+            >
               {isConnecting ? "Connecting..." : "Connect"}
             </Button>
           </DialogFooter>
@@ -713,19 +756,15 @@ const Networks = () => {
               Prune Unused Networks
             </DialogTitle>
             <DialogDescription className="text-muted-foreground pt-2">
-              This will remove all networks not used by at least one container.
-              This action cannot be undone. Are you sure?
+              This will remove all networks not used by at least one container. This action cannot be undone. Are you
+              sure?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
             <Button variant="outline" onClick={() => setShowPruneDialog(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handlePrune}
-              className="bg-rose-600 hover:bg-rose-700 text-white"
-              disabled={isPruning}
-            >
+            <Button onClick={handlePrune} className="bg-rose-600 hover:bg-rose-700 text-white" disabled={isPruning}>
               {isPruning ? "Pruning..." : "Confirm Prune"}
             </Button>
           </DialogFooter>

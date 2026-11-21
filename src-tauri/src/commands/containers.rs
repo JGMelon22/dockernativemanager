@@ -2,28 +2,34 @@
  * File: containers.rs
  * Project: docker-native-manager
  * Created: 2026-03-17
- * 
+ *
  * Last Modified: Thu Mar 19 2026
  * Modified By: Pedro Farias
- * 
+ *
  */
 
-use bollard::container::{ListContainersOptions, StartContainerOptions, StopContainerOptions, RemoveContainerOptions, LogsOptions, RestartContainerOptions, CreateContainerOptions, Config, StatsOptions, MemoryStatsStats, InspectContainerOptions};
-use bollard::models::{HostConfig, PortBinding};
+use crate::models::{ContainerInfo, ContainerStats};
+use crate::utils::{get_docker, map_container_stats, TerminalSenders};
 use bollard::exec::{CreateExecOptions, StartExecResults};
+use bollard::models::{
+    ContainerCreateBody, ContainerSummaryStateEnum, HostConfig, PortBinding, PortSummaryTypeEnum,
+};
+use bollard::query_parameters::{
+    CreateContainerOptions, InspectContainerOptions, ListContainersOptions, LogsOptions,
+    RemoveContainerOptions, RestartContainerOptions, StartContainerOptions, StatsOptions,
+    StopContainerOptions,
+};
 use futures_util::stream::StreamExt;
 use std::collections::HashMap;
-use tokio::sync::mpsc;
-use tokio::io::AsyncWriteExt;
 use tauri::{AppHandle, Emitter};
-use crate::models::{ContainerInfo, ContainerStats};
-use crate::utils::{get_docker, TerminalSenders};
+use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc;
 
 #[tauri::command]
 pub async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
-    let docker = get_docker()?;
+    let docker = get_docker().await?;
     let containers = docker
-        .list_containers(Some(ListContainersOptions::<String> {
+        .list_containers(Some(ListContainersOptions {
             all: true,
             ..Default::default()
         }))
@@ -40,30 +46,60 @@ pub async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
                 .unwrap_or_else(|| "".to_string());
 
             let labels = c.labels.unwrap_or_default();
-            let stack = labels.get("com.docker.compose.project")
+            let stack = labels
+                .get("com.docker.compose.project")
                 .or_else(|| labels.get("com.docker.stack.namespace"))
                 .cloned()
                 .unwrap_or_else(|| "-".to_string());
 
             ContainerInfo {
                 id: c.id.unwrap_or_default(),
-                name: c.names.unwrap_or_default().first().map(|s| s.trim_start_matches('/').to_string()).unwrap_or_else(|| "unnamed".to_string()),
+                name: c
+                    .names
+                    .unwrap_or_default()
+                    .first()
+                    .map(|s| s.trim_start_matches('/').to_string())
+                    .unwrap_or_else(|| "unnamed".to_string()),
                 image: c.image.unwrap_or_default(),
-                status: c.state.unwrap_or_default(),
+                // `state` is a typed enum in the current API models; the UI still
+                // compares it against the daemon's lowercase strings.
+                status: match c.state {
+                    Some(ContainerSummaryStateEnum::CREATED) => "created".to_string(),
+                    Some(ContainerSummaryStateEnum::RUNNING) => "running".to_string(),
+                    Some(ContainerSummaryStateEnum::PAUSED) => "paused".to_string(),
+                    Some(ContainerSummaryStateEnum::RESTARTING) => "restarting".to_string(),
+                    Some(ContainerSummaryStateEnum::EXITED) => "exited".to_string(),
+                    Some(ContainerSummaryStateEnum::REMOVING) => "removing".to_string(),
+                    Some(ContainerSummaryStateEnum::DEAD) => "dead".to_string(),
+                    Some(ContainerSummaryStateEnum::STOPPING) => "stopping".to_string(),
+                    _ => String::new(),
+                },
                 state: c.status.unwrap_or_default(),
-                ports: c.ports.unwrap_or_default().iter().map(|p| {
-                    let typ = match &p.typ {
-                        Some(bollard::models::PortTypeEnum::TCP) => "tcp",
-                        Some(bollard::models::PortTypeEnum::UDP) => "udp",
-                        Some(bollard::models::PortTypeEnum::SCTP) => "sctp",
-                        _ => "",
-                    };
-                    if let Some(pub_port) = p.public_port {
-                        format!("{}:{}->{}/{}", p.ip.as_deref().unwrap_or(""), pub_port, p.private_port, typ)
-                    } else {
-                        format!("{}/{}", p.private_port, typ)
-                    }
-                }).collect::<Vec<_>>().join(", "),
+                ports: c
+                    .ports
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|p| {
+                        let typ = match &p.typ {
+                            Some(PortSummaryTypeEnum::TCP) => "tcp",
+                            Some(PortSummaryTypeEnum::UDP) => "udp",
+                            Some(PortSummaryTypeEnum::SCTP) => "sctp",
+                            _ => "",
+                        };
+                        if let Some(pub_port) = p.public_port {
+                            format!(
+                                "{}:{}->{}/{}",
+                                p.ip.as_deref().unwrap_or(""),
+                                pub_port,
+                                p.private_port,
+                                typ
+                            )
+                        } else {
+                            format!("{}/{}", p.private_port, typ)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 created: c.created.unwrap_or(0),
                 ip_address,
                 labels,
@@ -76,26 +112,38 @@ pub async fn get_containers() -> Result<Vec<ContainerInfo>, String> {
 
 #[tauri::command]
 pub async fn start_container(id: String) -> Result<(), String> {
-    let docker = get_docker()?;
-    docker.start_container(&id, None::<StartContainerOptions<String>>).await.map_err(|e| e.to_string())
+    let docker = get_docker().await?;
+    docker
+        .start_container(&id, None::<StartContainerOptions>)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn stop_container(id: String) -> Result<(), String> {
-    let docker = get_docker()?;
-    docker.stop_container(&id, None::<StopContainerOptions>).await.map_err(|e| e.to_string())
+    let docker = get_docker().await?;
+    docker
+        .stop_container(&id, None::<StopContainerOptions>)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn restart_container(id: String) -> Result<(), String> {
-    let docker = get_docker()?;
-    docker.restart_container(&id, None::<RestartContainerOptions>).await.map_err(|e| e.to_string())
+    let docker = get_docker().await?;
+    docker
+        .restart_container(&id, None::<RestartContainerOptions>)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn delete_container(id: String) -> Result<(), String> {
-    let docker = get_docker()?;
-    docker.remove_container(&id, None::<RemoveContainerOptions>).await.map_err(|e| e.to_string())
+    let docker = get_docker().await?;
+    docker
+        .remove_container(&id, None::<RemoveContainerOptions>)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -106,19 +154,19 @@ pub async fn create_container(
     envs: Vec<String>,
     volumes: Vec<String>,
 ) -> Result<(), String> {
-    let docker = get_docker()?;
+    let docker = get_docker().await?;
 
     let options = if name.trim().is_empty() {
         None
     } else {
         Some(CreateContainerOptions {
-            name,
+            name: Some(name),
             ..Default::default()
         })
     };
 
     let mut port_bindings = HashMap::new();
-    let mut exposed_ports = HashMap::new();
+    let mut exposed_ports: Vec<String> = Vec::new();
 
     for port_mapping in ports {
         let parts: Vec<&str> = port_mapping.split(':').collect();
@@ -136,7 +184,7 @@ pub async fn create_container(
                     host_port: Some(host_port),
                 }]),
             );
-            exposed_ports.insert(container_port, HashMap::new());
+            exposed_ports.push(container_port);
         }
     }
 
@@ -154,7 +202,7 @@ pub async fn create_container(
         ..Default::default()
     };
 
-    let config = Config {
+    let config = ContainerCreateBody {
         image: Some(image),
         env: if envs.is_empty() { None } else { Some(envs) },
         exposed_ports: if exposed_ports.is_empty() {
@@ -180,15 +228,17 @@ pub async fn get_container_logs(
     tail: Option<usize>,
     since: Option<u64>,
 ) -> Result<String, String> {
-    let docker = get_docker()?;
+    let docker = get_docker().await?;
 
     let logs_options = LogsOptions {
         follow: false,
         stdout: true,
         stderr: true,
         timestamps: timestamps,
-        tail: tail.map(|t| t.to_string()).unwrap_or_else(|| "all".to_string()),
-        since: since.map(|s| s as i64).unwrap_or(0),
+        tail: tail
+            .map(|t| t.to_string())
+            .unwrap_or_else(|| "all".to_string()),
+        since: since.map(|s| s as i32).unwrap_or(0),
         ..Default::default()
     };
 
@@ -204,68 +254,18 @@ pub async fn get_container_logs(
 
 #[tauri::command]
 pub async fn get_container_stats(id: String) -> Result<ContainerStats, String> {
-    let docker = get_docker()?;
-    
-    let mut stats_stream = docker.stats(&id, Some(StatsOptions {
-        stream: false,
-        one_shot: false,
-    }));
+    let docker = get_docker().await?;
+
+    let mut stats_stream = docker.stats(
+        &id,
+        Some(StatsOptions {
+            stream: false,
+            one_shot: false,
+        }),
+    );
 
     if let Some(Ok(stats)) = stats_stream.next().await {
-        let cpu_delta = stats.cpu_stats.cpu_usage.total_usage as f64 - stats.precpu_stats.cpu_usage.total_usage as f64;
-        let system_delta = stats.cpu_stats.system_cpu_usage.unwrap_or(0) as f64 - stats.precpu_stats.system_cpu_usage.unwrap_or(0) as f64;
-        let mut cpu_percent = 0.0;
-        
-        if system_delta > 0.0 && cpu_delta > 0.0 {
-            let num_cpus = stats.cpu_stats.online_cpus.unwrap_or(1) as f64;
-            cpu_percent = (cpu_delta / system_delta) * num_cpus * 100.0;
-        }
-
-        let memory_usage = stats.memory_stats.usage.unwrap_or(0);
-        let memory_limit = stats.memory_stats.limit.unwrap_or(0);
-        
-        let mut actual_memory = memory_usage;
-        if let Some(stats_detail) = stats.memory_stats.stats {
-            match stats_detail {
-                MemoryStatsStats::V1(v1) => {
-                    actual_memory = memory_usage.saturating_sub(v1.cache);
-                }
-                MemoryStatsStats::V2(v2) => {
-                    actual_memory = memory_usage.saturating_sub(v2.inactive_file);
-                }
-            }
-        }
-
-        let mut net_rx = 0;
-        let mut net_tx = 0;
-        if let Some(networks) = stats.networks {
-            for net in networks.values() {
-                net_rx += net.rx_bytes;
-                net_tx += net.tx_bytes;
-            }
-        }
-
-        let mut disk_read = 0;
-        let mut disk_write = 0;
-        if let Some(ios) = stats.blkio_stats.io_service_bytes_recursive {
-            for io in ios {
-                match io.op.to_lowercase().as_str() {
-                    "read" => disk_read += io.value,
-                    "write" => disk_write += io.value,
-                    _ => {}
-                }
-            }
-        }
-
-        return Ok(ContainerStats {
-            cpu_percent,
-            memory_usage: actual_memory,
-            memory_limit,
-            disk_read,
-            disk_write,
-            net_rx,
-            net_tx,
-        });
+        return Ok(map_container_stats(&stats));
     }
 
     Err("Could not get stats".into())
@@ -273,8 +273,11 @@ pub async fn get_container_stats(id: String) -> Result<ContainerStats, String> {
 
 #[tauri::command]
 pub async fn inspect_container(id: String) -> Result<String, String> {
-    let docker = get_docker()?;
-    let inspect = docker.inspect_container(&id, None::<InspectContainerOptions>).await.map_err(|e| e.to_string())?;
+    let docker = get_docker().await?;
+    let inspect = docker
+        .inspect_container(&id, None::<InspectContainerOptions>)
+        .await
+        .map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&inspect).map_err(|e| e.to_string())
 }
 
@@ -286,7 +289,7 @@ pub async fn exec_container(
     shell: String,
     user: Option<String>,
 ) -> Result<(), String> {
-    let docker = get_docker()?;
+    let docker = get_docker().await?;
 
     let shell_path = match shell.as_str() {
         "bash" => "/bin/bash",
@@ -309,9 +312,15 @@ pub async fn exec_container(
         }
     }
 
-    let exec = docker.create_exec(&container_id, exec_config).await.map_err(|e| e.to_string())?;
+    let exec = docker
+        .create_exec(&container_id, exec_config)
+        .await
+        .map_err(|e| e.to_string())?;
 
-    if let StartExecResults::Attached { mut output, mut input } = docker
+    if let StartExecResults::Attached {
+        mut output,
+        mut input,
+    } = docker
         .start_exec(&exec.id, None)
         .await
         .map_err(|e| e.to_string())?
